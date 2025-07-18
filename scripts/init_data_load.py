@@ -1,9 +1,19 @@
 import psycopg2
 import os
 from nba_api.stats.static import teams, players
-from nba_api.stats.endpoints import playergamelog
+from nba_api.stats.endpoints import boxscoretraditionalv2
 from nba_api.stats.endpoints import leaguegamefinder
 import time
+import pandas as pd
+from requests.exceptions import Timeout, ConnectionError
+import random
+from typing import Optional
+
+# Retry configuration
+MAX_RETRIES = 3
+BASE_TIMEOUT = 120  # Increased timeout to 120 seconds
+RATE_LIMIT_MIN = 1.5  # Minimum seconds between requests
+RATE_LIMIT_MAX = 2.5  # Maximum seconds between requests
 
 season_to_load = ['2023-24']
 
@@ -17,6 +27,31 @@ connection = psycopg2.connect(
 
 cur = connection.cursor()
 print("connected to database")
+
+def rate_limit_sleep():
+    """Sleep for a random duration to avoid rate limiting"""
+    time.sleep(random.uniform(RATE_LIMIT_MIN, RATE_LIMIT_MAX))
+
+def make_api_request(request_func, *args, **kwargs) -> pd.DataFrame:
+    """Make an API request with retry logic"""
+    for attempt in range(MAX_RETRIES):
+        try:
+            if attempt > 0:
+                print(f"Retry attempt {attempt + 1}/{MAX_RETRIES}")
+            result = request_func(*args, **kwargs)
+            if result is None:
+                raise ValueError("API request returned None")
+            df = result.get_data_frames()[0]
+            if not isinstance(df, pd.DataFrame) or df.empty:
+                raise ValueError("No data returned from API")
+            return df
+        except Exception as e:
+            if attempt == MAX_RETRIES - 1:
+                raise
+            print(f"Request failed with error: {str(e)}")
+            # Exponential backoff
+            time.sleep((attempt + 1) * 2)
+    raise ValueError("Failed to get valid response after all retries")
 
 def load_players_data():
     try:
@@ -83,6 +118,10 @@ def load_teams_data():
 
 def load_games_data():
     try:
+
+        active_teams = teams.get_teams()
+        valid_teams_set = {team['id'] for team in active_teams}
+
         for season in season_to_load:
                 game_finder = leaguegamefinder.LeagueGameFinder(season_nullable=season)
                 all_games_for_season = game_finder.get_data_frames()[0]
@@ -91,6 +130,9 @@ def load_games_data():
                 time.sleep(0.75)
                 
                 for index, row in all_games_for_season.iterrows():
+                        if row['TEAM_ID'] not in valid_teams_set:
+                            continue
+                    
                         game_data = {
                             'season_id': row['SEASON_ID'],
                             'team_id': row['TEAM_ID'],
@@ -151,66 +193,112 @@ def load_games_data():
         connection.rollback()
         raise
 
+def convert_time_to_minutes(time_str):
+    if not time_str or time_str == '':
+        return 0
+    try:
+        minutes, seconds = time_str.split(':')
+        return float(minutes) + float(seconds)/60
+    except:
+        return 0
 
 def load_player_game_stats():
     try:
-        all_players = players.get_active_players()
-        print(f'Loading game stats for {len(all_players)} players')
+        cur.execute("SELECT id FROM players")
+        active_player_ids = {row[0] for row in cur.fetchall()}
+        print(f"Active player IDs: {len(active_player_ids)} players found")
 
-        for player in all_players:
-                player_id = player["id"]
+        # Get already processed games
+        cur.execute("SELECT DISTINCT game_id FROM player_game_stats")
+        processed_games = {row[0] for row in cur.fetchall()}
+        print(f"Found {len(processed_games)} already processed games")
+
+        from_games_table = """
+            SELECT DISTINCT game_id
+            FROM games
+            WHERE season_id IN (22023)
+        """
+
+        cur.execute(from_games_table)
+        all_games = cur.fetchall()
+        total_games = len(all_games)
+        print(f"Processing {total_games} games")
+
+        for game_index, game_row in enumerate(all_games, 1):
+                game_id = game_row[0]
                 
+                # Skip if already processed
+                if game_id in processed_games:
+                    print(f"Skipping already processed game {game_index}/{total_games} (ID: {game_id})")
+                    continue
+                
+                print(f"Processing game {game_index}/{total_games} (ID: {game_id})")
+  
                 for season in season_to_load:
-                        # Get player's game log for the season
-                        gamelog = playergamelog.PlayerGameLog(player_id=player_id, season=season)
-                        player_games = gamelog.get_data_frames()[0]
-                        
-                        print(f'Loading {len(player_games)} games for player {player["full_name"]} in season {season}')
-                        time.sleep(0.75)  # Rate limiting to avoid API issues
-                        
-                        for index, game in player_games.iterrows():
+                        try:
+                            player_games = make_api_request(
+                                boxscoretraditionalv2.BoxScoreTraditionalV2,
+                                game_id=game_id,
+                                timeout=BASE_TIMEOUT
+                            )
+                            
+                            print(f'Loading {len(player_games)} player stats for game {game_id} in season {season}')
+                            rate_limit_sleep()
+                            
+                            for index, game in player_games.iterrows():
+                                    player_id = int(game['PLAYER_ID'])
+                                     
+                                    if player_id not in active_player_ids:
+                                        continue
 
-                                game_data = {
-                                    'player_id': player_id,
-                                    'game_id': game['Game_ID'],
-                                    'team_id': game['TEAM_ID'],
-                                    'minutes': float(game['MIN']) if game['MIN'] != '' else 0,
-                                    'points': game['PTS'],
-                                    'rebounds': game['REB'],
-                                    'assists': game['AST'],
-                                    'steals': game['STL'],
-                                    'blocks': game['BLK'],
-                                    'turnovers': game['TOV'],
-                                    'fgm': game['FGM'],
-                                    'fga': game['FGA'],
-                                    'fg_pct': game['FG_PCT'],
-                                    'fg3m': game['FG3M'],
-                                    'fg3a': game['FG3A'],
-                                    'fg3_pct': game['FG3_PCT'],
-                                    'ftm': game['FTM'],
-                                    'fta': game['FTA'],
-                                    'ft_pct': game['FT_PCT']
-                                }
-                                
-                                sql_command = """
-                                    INSERT INTO player_game_stats (
-                                        player_id, game_id, team_id, minutes, points,
-                                        rebounds, assists, steals, blocks, turnovers,
-                                        fgm, fga, fg_pct, fg3m, fg3a, fg3_pct,
-                                        ftm, fta, ft_pct
-                                    ) VALUES (
-                                        %(player_id)s, %(game_id)s, %(team_id)s, %(minutes)s, %(points)s,
-                                        %(rebounds)s, %(assists)s, %(steals)s, %(blocks)s, %(turnovers)s,
-                                        %(fgm)s, %(fga)s, %(fg_pct)s, %(fg3m)s, %(fg3a)s, %(fg3_pct)s,
-                                        %(ftm)s, %(fta)s, %(ft_pct)s
-                                    )
-                                    ON CONFLICT (player_id, game_id) DO NOTHING;
-                                """
-                                
-                                cur.execute(sql_command, game_data)
-                                
+                                    game_data = {
+                                        'player_id': player_id,
+                                        'game_id': game['GAME_ID'],
+                                        'team_id': game['TEAM_ID'],
+                                        'minutes': convert_time_to_minutes(game['MIN']),
+                                        'points': 0 if pd.isna(game['PTS']) else game['PTS'],
+                                        'rebounds': 0 if pd.isna(game['REB']) else game['REB'],
+                                        'assists': 0 if pd.isna(game['AST']) else game['AST'],
+                                        'steals': 0 if pd.isna(game['STL']) else game['STL'],
+                                        'blocks': 0 if pd.isna(game['BLK']) else game['BLK'],
+                                        'turnovers': 0 if pd.isna(game['TO']) else game['TO'],
+                                        'fgm': 0 if pd.isna(game['FGM']) else game['FGM'],
+                                        'fga': 0 if pd.isna(game['FGA']) else game['FGA'],
+                                        'fg_pct': 0 if pd.isna(game['FG_PCT']) else game['FG_PCT'],
+                                        'fg3m': 0 if pd.isna(game['FG3M']) else game['FG3M'],
+                                        'fg3a': 0 if pd.isna(game['FG3A']) else game['FG3A'],
+                                        'fg3_pct': 0 if pd.isna(game['FG3_PCT']) else game['FG3_PCT'],
+                                        'ftm': 0 if pd.isna(game['FTM']) else game['FTM'],
+                                        'fta': 0 if pd.isna(game['FTA']) else game['FTA'],
+                                        'ft_pct': 0 if pd.isna(game['FT_PCT']) else game['FT_PCT']
+                                    }
+                                    
+                                    sql_command = """
+                                        INSERT INTO player_game_stats (
+                                            player_id, game_id, team_id, minutes, points,
+                                            rebounds, assists, steals, blocks, turnovers,
+                                            fgm, fga, fg_pct, fg3m, fg3a, fg3_pct,
+                                            ftm, fta, ft_pct
+                                        ) VALUES (
+                                            %(player_id)s, %(game_id)s, %(team_id)s, %(minutes)s, %(points)s,
+                                            %(rebounds)s, %(assists)s, %(steals)s, %(blocks)s, %(turnovers)s,
+                                            %(fgm)s, %(fga)s, %(fg_pct)s, %(fg3m)s, %(fg3a)s, %(fg3_pct)s,
+                                            %(ftm)s, %(fta)s, %(ft_pct)s
+                                        )
+                                        ON CONFLICT (player_id, game_id) DO NOTHING;
+                                    """
+                                    
+                                    cur.execute(sql_command, game_data)
+                                    
+                            # Commit after each game to save progress
+                            connection.commit()
+                            print(f'Successfully processed game {game_id}')
+                            
+                        except Exception as e:
+                            print(f'Error processing game {game_id}: {str(e)}')
+                            # Continue with next game instead of failing completely
+                            continue
 
-        connection.commit()
         print('Done loading player game stats')
         
     except Exception as e:
