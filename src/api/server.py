@@ -16,3 +16,31 @@ def get_db_connection():
     return conn
 
 app = Flask(__name__)
+
+@app.route('/api/v1/teams', methods=['GET'])
+def get_teams():
+    team_list = []
+    conn = None
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        cur.execute("SELECT id, full_name, abbreviation FROM teams ORDER BY full_name;")
+        result = cur.fetchall()
+
+        if result and cur.description:
+            columns = [desc[0] for desc in cur.description]
+            team_list = [dict(zip(columns, row)) for row in result]
+
+        cur.close()
+
+    except Exception as e:
+        print(e)
+        team_list = []
+
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return jsonify(team_list)
