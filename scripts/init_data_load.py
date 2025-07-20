@@ -8,6 +8,9 @@ import pandas as pd
 from requests.exceptions import Timeout, ConnectionError
 import random
 from typing import Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Retry configuration
 MAX_RETRIES = 3
@@ -18,11 +21,11 @@ RATE_LIMIT_MAX = 2.5  # Maximum seconds between requests
 season_to_load = ['2023-24']
 
 connection = psycopg2.connect(
-    dbname = "postgres",
-    user = "postgres",
-    password = "beattheodds",
-    host = "localhost",
-    port = "5432",
+    dbname = os.getenv("DB_NAME"),
+    user = os.getenv("DB_USER"),
+    password = os.getenv("DB_PASSWORD"),
+    host = os.getenv("DB_HOST"),
+    port = os.getenv("DB_PORT"),
 )
 
 cur = connection.cursor()
