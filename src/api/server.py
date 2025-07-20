@@ -26,7 +26,11 @@ def get_teams():
         conn = get_db_connection()
         cur = conn.cursor()
 
-        cur.execute("SELECT id, full_name, abbreviation FROM teams ORDER BY full_name;")
+        cur.execute("""
+                    SELECT id, full_name, abbreviation, nickname, city, state, year_founded 
+                    FROM teams 
+                    ORDER BY full_name;
+                    """)
         result = cur.fetchall()
 
         if result and cur.description:
@@ -44,3 +48,36 @@ def get_teams():
             conn.close()
 
     return jsonify(team_list)
+
+@app.route('/api/v1/players', methods= ['GET'])
+def get_player():
+    player_list = []
+    conn = None
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        cur.execute("""
+                    SELECT id, full_name, first_name, last_name, is_active
+                    FROM players 
+                    ORDER BY full_name
+                    """)
+        
+        result = cur.fetchall()
+        
+        if result and cur.description:
+            columns = [desc[0] for desc in cur.description]
+            player_list = [dict(zip(columns,row))for row in result]
+
+        cur.close()
+
+    except Exception as e:
+        print(e)
+        player_list = []
+
+    finally:
+        if conn is not None:
+            conn.close()
+        
+        return jsonify(player_list)
