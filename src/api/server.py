@@ -116,7 +116,7 @@ def get_player_stats(player_id):
         result = cur.fetchall()
 
         if result and cur.description:
-            columns = (desc[0] for desc in cur.description)
+            columns = [desc[0] for desc in cur.description]
             player_stats = [dict(zip(columns,row)) for row in result]
 
         cur.close()
