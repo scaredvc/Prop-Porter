@@ -1,6 +1,6 @@
 import psycopg2
 import os
-from flask import Flask, request, jsonify, 
+from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -130,3 +130,44 @@ def get_player_stats(player_id):
             conn.close()
 
         return jsonify(player_stats)
+    
+@app.route("/api/v1/teams/<int:id>/games", methods = ["GET"])
+def get_games(id):
+    games = []
+    conn = None
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        sql_query = ("""
+            SELECT season_id, team_id, team_abbreviation, game_id, game_date,
+                     matchup, win_loss, minutes, points, fgm, fga, fg_pct,
+                     fg3m, fg3a, fg3_pct, ftm, fta, ft_pct, oreb, dreb, 
+                     reb, ast, stl, blk, tov, pf, plus_minus
+            FROM 
+                games
+            WHERE 
+                team_id = %s
+            ORDER BY 
+                game_date;
+            """)
+        
+        cur.execute(sql_query, (id,))
+        result = cur.fetchall()
+
+        if result and cur.description:
+            columns = [desc[0] for desc in cur.description]
+            games = [dict(zip(columns, row)) for row in result]
+
+        cur.close()
+        
+    except Exception as e:
+        print(e)
+        games = []
+
+    finally:
+        if conn is not None:
+            conn.close()
+
+        return jsonify(games)
