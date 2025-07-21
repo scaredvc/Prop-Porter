@@ -26,8 +26,51 @@ def create_training_dataframe():
     sql_query = """
         -- YOUR SQL QUERY GOES HERE
         SELECT 
-            pgs.*,  -- pgs.* is a shortcut for "all columns from player_game_stats"
-            g.matchup
+            pgs.player_id,
+            pgs.game_id,
+            pgs.team_id,
+            pgs.minutes AS player_minutes,
+            pgs.points AS player_points,
+            pgs.rebounds AS player_rebounds,
+            pgs.assists AS player_assists,
+            pgs.steals AS player_steals,
+            pgs.blocks AS player_blocks,
+            pgs.turnovers AS player_turnovers,
+            pgs.fgm AS player_fgm,
+            pgs.fga AS player_fga,
+            pgs.fg_pct AS player_fg_pct,
+            pgs.fg3m AS player_fg3m,
+            pgs.fg3a AS player_fg3a,
+            pgs.fg3_pct AS player_fg3_pct,
+            pgs.ftm AS player_ftm,
+            pgs.fta AS player_fta,
+            pgs.ft_pct AS player_ft_pct,
+            g.season_id,
+            g.team_id,
+            g.team_abbreviation,
+            g.game_id,
+            g.game_date,
+            g.matchup,
+            g.win_loss,
+            g.minutes AS game_minutes,
+            g.points AS game_points,
+            g.fgm AS game_fgm,
+            g.fga AS game_fga,
+            g.fg_pct AS game_fg_pct,
+            g.fg3m AS game_fg3m,
+            g.fg3a AS game_fg3a,
+            g.fg3_pct AS game_fg3_pct,
+            g.ftm AS game_ftm,
+            g.fta AS game_fta,
+            g.ft_pct AS game_ft_pct,
+            g.oreb AS game_oreb,
+            g.dreb AS game_dreb,
+            g.ast AS game_ast,
+            g.stl AS game_stl,
+            g.blk AS game_blk,
+            g.tov AS game_tov,
+            g.pf AS game_pf,
+            g.plus_minus AS game_plus_minus
         FROM 
             player_game_stats pgs
         JOIN 
