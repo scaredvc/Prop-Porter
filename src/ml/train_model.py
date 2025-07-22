@@ -16,10 +16,7 @@ def get_db_connection():
     return conn
 
 def create_training_dataframe():
-    """
-    Connects to the database, joins tables, and creates the master DataFrame
-    for model training.
-    """
+
     print("Connecting to the database...")
     conn = get_db_connection()
 
@@ -90,6 +87,4 @@ def create_training_dataframe():
 if __name__ == '__main__':
     master_df = create_training_dataframe()
 
-    # In the next steps, we will add code here to do feature engineering
-    # and train our Scikit-learn model using this `master_df`.
 
