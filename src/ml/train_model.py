@@ -85,11 +85,17 @@ def create_training_dataframe():
     return training_df
 
 def feature_engineering(df):
+
     df["player_points_last_10"] = df.groupby("player_id")["player_points"].transform(
         lambda x: x.rolling(window=10, min_periods=1).mean().shift(1)
         )
+    
+    df['player_points_last_10'] = df['player_points_last_10'].fillna(0)
+    
+    return df
 
 if __name__ == '__main__':
     master_df = create_training_dataframe()
-
+    featured_df = feature_engineering(master_df)
+    print(featured_df[featured_df['player_id'] == 2544].head(15))
 
