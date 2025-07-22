@@ -84,6 +84,11 @@ def create_training_dataframe():
 
     return training_df
 
+def feature_engineering(df):
+    df["player_points_last_10"] = df.groupby("player_id")["player_points"].transform(
+        lambda x: x.rolling(window=10, min_periods=1).mean().shift(1)
+        )
+
 if __name__ == '__main__':
     master_df = create_training_dataframe()
 
