@@ -61,3 +61,6 @@ IDE / Editor specific
 .idea/
 .vscode/
 *.swp
+
+models/
+*.pkl
