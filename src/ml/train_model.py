@@ -24,58 +24,54 @@ def create_training_dataframe():
     conn = get_db_connection()
 
     sql_query = """
-        -- YOUR SQL QUERY GOES HERE
-        SELECT 
-            pgs.player_id,
-            pgs.game_id,
-            pgs.team_id,
-            pgs.minutes AS player_minutes,
-            pgs.points AS player_points,
-            pgs.rebounds AS player_rebounds,
-            pgs.assists AS player_assists,
-            pgs.steals AS player_steals,
-            pgs.blocks AS player_blocks,
-            pgs.turnovers AS player_turnovers,
-            pgs.fgm AS player_fgm,
-            pgs.fga AS player_fga,
-            pgs.fg_pct AS player_fg_pct,
-            pgs.fg3m AS player_fg3m,
-            pgs.fg3a AS player_fg3a,
-            pgs.fg3_pct AS player_fg3_pct,
-            pgs.ftm AS player_ftm,
-            pgs.fta AS player_fta,
-            pgs.ft_pct AS player_ft_pct,
-            g.season_id,
-            g.team_id,
-            g.team_abbreviation,
-            g.game_id,
-            g.game_date,
-            g.matchup,
-            g.win_loss,
-            g.minutes AS game_minutes,
-            g.points AS game_points,
-            g.fgm AS game_fgm,
-            g.fga AS game_fga,
-            g.fg_pct AS game_fg_pct,
-            g.fg3m AS game_fg3m,
-            g.fg3a AS game_fg3a,
-            g.fg3_pct AS game_fg3_pct,
-            g.ftm AS game_ftm,
-            g.fta AS game_fta,
-            g.ft_pct AS game_ft_pct,
-            g.oreb AS game_oreb,
-            g.dreb AS game_dreb,
-            g.ast AS game_ast,
-            g.stl AS game_stl,
-            g.blk AS game_blk,
-            g.tov AS game_tov,
-            g.pf AS game_pf,
-            g.plus_minus AS game_plus_minus
-        FROM 
-            player_game_stats pgs
-        JOIN 
-            games g ON pgs.game_id = g.game_id AND pgs.team_id = g.team_id;
-    """
+            WITH game_opponents AS (
+                -- First, create a temporary helper table to find every team's opponent for each game
+                SELECT
+                    g1.game_id,
+                    g1.team_id,
+                    g2.team_id AS opponent_team_id,
+                    g2.points AS opponent_points -- Also grab the opponent's points
+                FROM games g1
+                JOIN games g2 ON g1.game_id = g2.game_id AND g1.team_id != g2.team_id
+            )
+            -- Now, build the main query using the helper table
+            SELECT 
+                -- Player Stats (aliased for clarity)
+                pgs.player_id,
+                pgs.game_id,
+                pgs.team_id,
+                pgs.minutes AS player_minutes,
+                pgs.points AS player_points,
+                pgs.rebounds AS player_rebounds,
+                pgs.assists AS player_assists,
+                pgs.steals AS player_steals,
+                pgs.blocks AS player_blocks,
+                pgs.turnovers AS player_turnovers,
+                
+                -- Game Context
+                g.game_date,
+                g.matchup,
+                
+                -- Player's Team Stats (aliased to avoid conflict)
+                g.win_loss AS team_win_loss,
+                g.points AS team_points,
+                
+                -- Opponent Information (from our helper table)
+                go.opponent_team_id,
+                go.opponent_points AS points_allowed
+            FROM 
+                player_game_stats pgs
+            -- Join player stats with their team's game stats
+            JOIN 
+                games g ON pgs.game_id = g.game_id AND pgs.team_id = g.team_id
+            -- Join with our helper table to get opponent info
+            JOIN
+                game_opponents go ON pgs.game_id = go.game_id AND pgs.team_id = go.team_id
+            WHERE
+                pgs.minutes > 0 -- Only include games where the player actually played
+            ORDER BY 
+                pgs.player_id, g.game_date;
+        """
 
     training_df = pd.read_sql_query(sql_query, conn)
 
@@ -89,11 +85,24 @@ def create_training_dataframe():
 
 def feature_engineering(df):
 
+
+    # player points last 10
     df["player_points_last_10"] = df.groupby("player_id")["player_points"].transform(
         lambda x: x.rolling(window=10, min_periods=1).mean().shift(1)
         )
-    
     df['player_points_last_10'] = df['player_points_last_10'].fillna(0)
+
+
+    # opponent defensive strength
+    team_points_allowed = df[['game_id', 'team_id', 'opponent_team_id', 'player_points']].copy()
+    team_points_allowed = team_points_allowed.rename(columns={'player_points': 'opponent_points'})
+
+    df = pd.merge(
+        df,
+        team_points_allowed[['game_id', 'team_id', 'opponent_points']],
+        left_on=['game_id', 'opponent_team_id']
+    )
+
     
     return df
 
@@ -122,4 +131,5 @@ if __name__ == '__main__':
     featured_df = feature_engineering(master_df)
     
     trained_model = train_model(featured_df)
+    
 
