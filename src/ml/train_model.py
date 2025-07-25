@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error
+import joblib
 
 load_dotenv()
 
@@ -40,37 +41,22 @@ def create_training_dataframe():
                 pgs.player_id,
                 pgs.game_id,
                 pgs.team_id,
-                pgs.minutes AS player_minutes,
                 pgs.points AS player_points,
-                pgs.rebounds AS player_rebounds,
-                pgs.assists AS player_assists,
-                pgs.steals AS player_steals,
-                pgs.blocks AS player_blocks,
-                pgs.turnovers AS player_turnovers,
-                
-                -- Game Context
                 g.game_date,
-                g.matchup,
-                
-                -- Player's Team Stats (aliased to avoid conflict)
-                g.win_loss AS team_win_loss,
-                g.points AS team_points,
-                
-                -- Opponent Information (from our helper table)
                 go.opponent_team_id,
                 go.opponent_points AS points_allowed
             FROM 
                 player_game_stats pgs
-            -- Join player stats with their team's game stats
+
             JOIN 
                 games g ON pgs.game_id = g.game_id AND pgs.team_id = g.team_id
-            -- Join with our helper table to get opponent info
+
             JOIN
                 game_opponents go ON pgs.game_id = go.game_id AND pgs.team_id = go.team_id
             WHERE
-                pgs.minutes > 0 -- Only include games where the player actually played
+                pgs.minutes > 0
             ORDER BY 
-                pgs.player_id, g.game_date;
+                pgs.player_id, g.game_date
         """
 
     training_df = pd.read_sql_query(sql_query, conn)
@@ -88,48 +74,48 @@ def feature_engineering(df):
 
     # player points last 10
     df["player_points_last_10"] = df.groupby("player_id")["player_points"].transform(
-        lambda x: x.rolling(window=10, min_periods=1).mean().shift(1)
+        lambda x: x.rolling(window=30, min_periods=1).mean().shift(1)
         )
     df['player_points_last_10'] = df['player_points_last_10'].fillna(0)
 
 
     # opponent defensive strength
-    team_points_allowed = df[['game_id', 'team_id', 'opponent_team_id', 'player_points']].copy()
-    team_points_allowed = team_points_allowed.rename(columns={'player_points': 'opponent_points'})
+    df = df.sort_values(by=['opponent_team_id', 'game_date'])
 
-    df = pd.merge(
-        df,
-        team_points_allowed[['game_id', 'team_id', 'opponent_points']],
-        left_on=['game_id', 'opponent_team_id']
+    df['opponent_avg_points_allowed_last_10'] = df.groupby("opponent_team_id")["points_allowed"].transform(
+        lambda x: x.rolling(window=30, min_periods=1).mean().shift(1)
     )
+    df['opponent_avg_points_allowed_last_10'] = df['opponent_avg_points_allowed_last_10'].fillna(115) # average points allowed by the team
 
+    df = df.sort_values(by=['player_id', 'game_date'])
+    print("feature engineering complete")
     
     return df
 
 def train_model(df):
-    df = df.dropna()
-    features = ['player_points_last_10']
+    df_clean = df.dropna()
+    features = ['player_points_last_10', 'opponent_avg_points_allowed_last_10']
     target = 'player_points'
 
-    x = df[features]
-    y = df[target]
+    x = df_clean[features]
+    y = df_clean[target]
 
     X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
 
-    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
     model.fit(X_train, y_train)
 
-    y_pred = model.predict(X_test)
+    prediction = model.predict(X_test)
 
-    mae = mean_absolute_error(y_test, y_pred)
-    print(f"Mean Absolute Error: {mae}")
+    mae = mean_absolute_error(y_test, prediction)
+    print(f"Mean Absolute Error: {mae:.2f}")
 
+    model_filename = "player_points_predictor.pkl"
+    joblib.dump(model, model_filename)
+    print(f"Model saved to {model_filename}")
     return model
 
 if __name__ == '__main__':
     master_df = create_training_dataframe()
     featured_df = feature_engineering(master_df)
-    
     trained_model = train_model(featured_df)
-    
-
