@@ -173,5 +173,22 @@ def get_games(id):
         return jsonify(games)
     
 
+@app.route("/api/v1/predict", methods=['GET'])
+def predict_player_points():
+    if model is None:
+        return jsonify({"error": "Model not loaded"}), 500
+    
+    player_id = request.args.get('player_id', type=int)
+    opponent_id = request.args.get('opponent_team_id', type=int)
+
+    if not player_id or not opponent_id:
+        return jsonify({"error": "Missing required parameters"}), 400
+    
+    try:
+
+
+    
+
 if __name__ == "__main__":
+
     app.run(host="0.0.0.0", port=5001, debug=True)
