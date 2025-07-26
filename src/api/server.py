@@ -2,8 +2,19 @@ import psycopg2
 import os
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
+import joblib
+import pandas as pd
+import traceback
 
 load_dotenv()
+
+
+try: 
+    model = joblib.load("player_points_predictor.pkl")
+    print("Model loaded successfully")
+except FileNotFoundError:
+    print("Model not found")
+    model = None
 
 def get_db_connection():
     conn = psycopg2.connect(
@@ -179,15 +190,74 @@ def predict_player_points():
         return jsonify({"error": "Model not loaded"}), 500
     
     player_id = request.args.get('player_id', type=int)
-    opponent_id = request.args.get('opponent_team_id', type=int)
+    opponent_team_id = request.args.get('opponent_team_id', type=int)
 
-    if not player_id or not opponent_id:
+    if not player_id or not opponent_team_id:
         return jsonify({"error": "Missing required parameters"}), 400
     
+    conn = None
     try:
+        conn = get_db_connection()
+        cur = conn.cursor()
 
+        player_average_10_games_query = """
+                SELECT AVG(points)
+            FROM (
+                SELECT pgs.points
+                FROM player_game_stats pgs
+                JOIN games g ON pgs.game_id = g.game_id AND pgs.team_id = g.team_id
+                WHERE pgs.player_id = %s
+                ORDER BY g.game_date DESC
+                LIMIT 10
+            ) AS last_10_games;
+            """
+        
+        cur.execute(player_average_10_games_query, (player_id,))
+        player_avg_result = cur.fetchone()
+        player_points_last_10 = player_avg_result[0] if player_avg_result and player_avg_result[0] is not None else 0.0
 
+        opponent_avg_query = """
+                    WITH game_opponent AS (
+                        SELECT g1.game_id, g1.team_id, g2.points AS points_allowed
+                        FROM games g1 JOIN games g2 on g1.game_id = g2.game_id and g1.team_id != g2.team_id
+                    )
+
+                    SELECT AVG(points_allowed)
+                    FROM (
+                        SELECT go.points_allowed, g.game_date
+                        FROM games g JOIN game_opponent go ON g.game_id = go.game_id AND g.team_id = go.team_id
+                        WHERE g.team_id = %s
+                        ORDER BY g.game_date DESC
+                        LIMIT 10
+                    ) AS last_10_opponent_games;
+            """
+
+        cur.execute(opponent_avg_query, (opponent_team_id,))
+        opponent_avg_result = cur.fetchone()
+        opponent_avg_points_allowed_last_10 = opponent_avg_result[0] if opponent_avg_result and opponent_avg_result[0] is not None else 115.0
+
+        feature_df = pd.DataFrame({
+            'player_points_last_10': [player_points_last_10],
+            'opponent_avg_points_allowed_last_10': [opponent_avg_points_allowed_last_10]
+        })
+
+        prediction = model.predict(feature_df)
+        predicted_points = round(prediction[0], 2)
+
+        return jsonify ({
+            "player_id": player_id,
+            "opponent_team_id": opponent_team_id,
+            "predicted_points": predicted_points
+        })
+
+    except Exception as e:
+        print("Error during prediction")
+        traceback.print_exc()
+        return jsonify({"error": "An error occurred during prediction."}), 500
     
+    finally:
+        if conn:
+            conn.close()
 
 if __name__ == "__main__":
 
