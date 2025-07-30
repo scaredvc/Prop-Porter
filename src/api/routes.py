@@ -16,6 +16,10 @@ except FileNotFoundError:
     print("Model not found")
     model = None
 
+@app.route('/api/v1/health', methods=['GET'])
+def health_check():
+    return jsonify({"status": "ok", "message": "API is healthy"}), 200
+
 @app.route('/api/v1/teams', methods=['GET'])
 def get_teams():
     team_list = []
