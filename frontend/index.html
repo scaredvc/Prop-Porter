@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prop-Porter AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <main class="container">
+        <div class="card">
+            <div class="card-header">
+                <h1>Prop-Porter</h1>
+                <p>NBA Player Stat Predictor</p>
+            </div>
+            
+            <div class="card-body">
+                <div class="selectors">
+                    <div class="select-group">
+                        <label for="player-select">Select a Player:</label>
+                        <select id="player-select">
+                            <option>Loading Players...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="select-group">
+                        <label for="team-select">Select an Opponent:</label>
+                        <select id="team-select">
+                            <option>Loading Teams...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <button id="predict-button">Get Prediction</button>
+            </div>
+
+            <div class="card-footer">
+                <div id="result-container">
+                    <h2>Predicted Points: <span class="prediction-value">27.58</span></h2> 
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
