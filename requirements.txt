@@ -7,3 +7,4 @@ nba-api
 psycopg2-binary
 python-dotenv
 streamlit
+Flask-Cors
