@@ -21,7 +21,7 @@ body{
     border-radius: 12px;
     padding: 20px;
     overflow: hidden;
-    text-align: center;
+    text-align: flex-start;
     color: #fff;
 }
 
