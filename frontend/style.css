@@ -11,7 +11,7 @@ body{
 }
 
 .container{
-    max-width : 500px;
+    max-width : 900px;
     width: 100%;
     padding: 20px
 }
@@ -109,4 +109,182 @@ select:focus {
 .prediction-value {
     font-weight: 700;
     color: #4a90e2;
+}
+
+.stats-grid{
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+.stats-item{
+    background-color: #333333;
+    border-radius: 8px;
+    padding: 15px;
+    text-align: center;
+}
+
+.stats-label{
+    font-size: 14px;
+    font-weight: 500;
+    color: #ccc;
+    margin-bottom: 5px;
+}
+
+.stats-value{
+    font-size: 18px;
+    font-weight: 600;
+    color: #4a90e2;
+}
+
+/* Mode Toggle Styles */
+.mode-toggle {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.mode-button {
+    padding: 10px 20px;
+    border: 2px solid #4a90e2;
+    background: transparent;
+    color: #4a90e2;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.mode-button.active {
+    background: #4a90e2;
+    color: white;
+}
+
+.mode-button:hover {
+    background: #357abd;
+    border-color: #357abd;
+    color: white;
+}
+
+/* Daily Games Styles */
+.hidden {
+    display: none;
+}
+
+.games-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    padding: 20px;
+}
+
+.game-card {
+    background: #333333;
+    border-radius: 8px;
+    padding: 15px;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.game-card:hover {
+    transform: translateY(-2px);
+}
+
+.game-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    font-size: 14px;
+    color: #ccc;
+}
+
+.game-teams {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.team {
+    text-align: center;
+    flex: 1;
+}
+
+.team-name {
+    font-weight: 500;
+    margin-bottom: 5px;
+}
+
+.vs {
+    margin: 0 15px;
+    color: #ccc;
+}
+
+.player-list {
+    border-top: 1px solid #444444;
+    padding-top: 15px;
+}
+
+.player-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+}
+
+.player-name {
+    font-weight: 500;
+}
+
+.prediction-badge {
+    background: #4a90e2;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    margin-right: 8px;
+}
+
+.prediction-stats {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: #ccc;
+    font-size: 18px;
+}
+
+.error-message {
+    text-align: center;
+    padding: 40px;
+    color: #ff6b6b;
+    font-size: 16px;
+}
+
+.retry-button {
+    background: #4a90e2;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    margin-top: 16px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.retry-button:hover {
+    background: #357abd;
+}
+
+.no-games {
+    text-align: center;
+    padding: 40px;
+    color: #ccc;
+    font-size: 18px;
 }

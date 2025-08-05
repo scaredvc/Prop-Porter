@@ -12,7 +12,14 @@
 <body>
 
     <main class="container">
-        <div class="card">
+        <!-- Mode Toggle -->
+        <div class="mode-toggle">
+            <button id="custom-mode" class="mode-button active">Custom Prediction</button>
+            <button id="daily-mode" class="mode-button">Today's Games</button>
+        </div>
+
+        <!-- Custom Prediction Mode -->
+        <div id="custom-prediction" class="card">
             <div class="card-header">
                 <h1>Prop-Porter</h1>
                 <p>NBA Player Stat Predictor</p>
@@ -36,7 +43,34 @@
 
             <div class="card-footer">
                 <div id="result-container">
-                    <h2>Predicted Points: <span class="prediction-value"></span></h2> 
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-label">Predicted Points</div>
+                            <div class="stat-value" id="predicted-points"></div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Predicted Assists</div>
+                            <div class="stat-value" id="predicted-assists"></div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Predicted Rebounds</div>
+                            <div class="stat-value" id="predicted-rebounds"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Daily Games Mode -->
+        <div id="daily-games" class="card hidden">
+            <div class="card-header">
+                <h1>Today's Games</h1>
+                <p id="today-date"></p>
+            </div>
+            
+            <div class="card-body">
+                <div id="games-container" class="games-grid">
+                    <!-- Games will be populated here -->
                 </div>
             </div>
         </div>
