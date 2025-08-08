@@ -43,20 +43,27 @@
 
             <div class="card-footer">
                 <div id="result-container">
-                    <div class="stats-grid">
-                        <div class="stat-item">
-                            <div class="stat-label">Predicted Points</div>
-                            <div class="stat-value" id="predicted-points"></div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-label">Predicted Assists</div>
-                            <div class="stat-value" id="predicted-assists"></div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-label">Predicted Rebounds</div>
-                            <div class="stat-value" id="predicted-rebounds"></div>
-                        </div>
-                    </div>
+                    <div id="prediction-status" class="prediction-status"></div>
+                    <table class="stats-table" aria-label="Predicted stats">
+                        <thead>
+                            <tr>
+                                <th>Player</th>
+                                <th>Opponent</th>
+                                <th>PTS</th>
+                                <th>REB</th>
+                                <th>AST</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td id="predicted-player-name">—</td>
+                                <td id="predicted-opponent-name">—</td>
+                                <td id="predicted-points">—</td>
+                                <td id="predicted-rebounds">—</td>
+                                <td id="predicted-assists">—</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>

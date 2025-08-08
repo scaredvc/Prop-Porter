@@ -5,6 +5,12 @@ const playerSelect = document.getElementById("player-select");
 const teamSelect = document.getElementById("team-select");
 const predictButton = document.getElementById("predict-button");
 const resultContainer = document.getElementById("result-container");
+const predictionStatus = document.getElementById("prediction-status");
+const predictedPlayerEl = document.getElementById("predicted-player-name");
+const predictedOpponentEl = document.getElementById("predicted-opponent-name");
+const predictedPtsEl = document.getElementById("predicted-points");
+const predictedRebEl = document.getElementById("predicted-rebounds");
+const predictedAstEl = document.getElementById("predicted-assists");
 const customMode = document.getElementById("custom-mode");
 const dailyMode = document.getElementById("daily-mode");
 const customPrediction = document.getElementById("custom-prediction");
@@ -41,6 +47,11 @@ function formatDate(date) {
     });
 }
 
+function formatMaybe(value) {
+    const num = Number(value);
+    return Number.isFinite(num) ? num.toFixed(1) : 'N/A';
+}
+
 // Load daily games
 async function loadDailyGames() {
     todayDate.textContent = formatDate(new Date());
@@ -54,7 +65,8 @@ async function loadDailyGames() {
             throw new Error(`Failed to fetch daily games: ${response.status}`);
         }
         
-        const games = await response.json();
+        const data = await response.json();
+        const games = Array.isArray(data) ? data : (data?.games || []);
         
         if (!games || games.length === 0) {
             gamesContainer.innerHTML = '<div class="no-games">No games scheduled for today</div>';
@@ -76,18 +88,26 @@ async function loadDailyGames() {
                         <div class="team-name">${game.away_team}</div>
                     </div>
                 </div>
-                <div class="player-list">
-                    ${(game.key_players || []).map(player => `
-                        <div class="player-item">
-                            <span class="player-name">${player.name}</span>
-                            <div class="prediction-stats">
-                                <span class="prediction-badge">PTS: ${player.predictions?.points?.toFixed(1) || 'N/A'}</span>
-                                <span class="prediction-badge">REB: ${player.predictions?.rebounds?.toFixed(1) || 'N/A'}</span>
-                                <span class="prediction-badge">AST: ${player.predictions?.assists?.toFixed(1) || 'N/A'}</span>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
+                <table class="stats-table" aria-label="Predicted player stats">
+                    <thead>
+                        <tr>
+                            <th>Player</th>
+                            <th>PTS</th>
+                            <th>REB</th>
+                            <th>AST</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${(game.key_players || []).map(player => `
+                            <tr>
+                                <td>${player.name}</td>
+                                <td>${formatMaybe(player.predictions?.points)}</td>
+                                <td>${formatMaybe(player.predictions?.rebounds)}</td>
+                                <td>${formatMaybe(player.predictions?.assists)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
             </div>
         `).join('');
         
@@ -118,13 +138,27 @@ async function fetchData(endpoint) {
 // Initialize the custom prediction view
 async function initializeCustomPrediction() {
     try {
-        const [playerData, teamData] = await Promise.all([
+        const [playersRaw, teamsRaw] = await Promise.all([
             fetchData('/players'),
             fetchData('/teams')
         ]);
 
-        populateDropdown(playerSelect, playerData, 'full_name', 'id');
-        populateDropdown(teamSelect, teamData, 'full_name', 'id');
+        // Normalize possible response shapes
+        const playersAll = Array.isArray(playersRaw) ? playersRaw : (playersRaw?.players || []);
+        const teamsAll = Array.isArray(teamsRaw) ? teamsRaw : (teamsRaw?.teams || []);
+
+        // Filter only active players (default to true if undefined), and sort
+        const players = playersAll
+            .filter(p => p && (p.is_active !== false))
+            .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+
+        // Sort teams alphabetically by full name
+        const teams = teamsAll
+            .filter(t => t)
+            .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+
+        populateDropdown(playerSelect, players, 'full_name', 'id');
+        populateDropdown(teamSelect, teams, 'full_name', 'id');
         
         console.log("Custom prediction view initialized");
     } catch (error) {
@@ -151,7 +185,8 @@ function populateDropdown(selectElement, data, nameKey, valueKey) {
 
     // Add default option
     const defaultOption = document.createElement('option');
-    defaultOption.textContent = `Select a ${nameKey.includes('player') ? 'Player' : 'Team'}...`;
+    const isPlayerSelect = (selectElement.id || '').includes('player');
+    defaultOption.textContent = `Select a ${isPlayerSelect ? 'Player' : 'Team'}...`;
     defaultOption.value = "";
     defaultOption.disabled = true;
     defaultOption.selected = true;
@@ -176,7 +211,7 @@ predictButton.addEventListener('click', async() =>{
     console.log("Selected Team ID:", selectedTeamId);
 
     if(selectedPlayerId === "" || selectedTeamId === "") return; 
-    resultContainer.innerHTML = `<h2>Asking Porter...</h2>`
+    predictionStatus.textContent = 'Asking Porter...';
 
     try{
         const fullUrl = `${API_BASE_URL}/predict?player_id=${selectedPlayerId}&opponent_team_id=${selectedTeamId}`;
@@ -187,19 +222,35 @@ predictButton.addEventListener('click', async() =>{
             throw new Error(`prediction api failed ${response.status}`);
         }
         const predictionData = await response.json();
-        
-        // Check if we have all required predictions
-        if (!predictionData.predicted_points || !predictionData.predicted_rebounds || !predictionData.predicted_assists) {
-            throw new Error('Missing prediction data');
+
+        // Validate and update table (points required, others optional)
+        const pointsRaw = predictionData.predicted_points;
+        const reboundsRaw = predictionData.predicted_rebounds;
+        const assistsRaw = predictionData.predicted_assists;
+
+        const points = Number(pointsRaw);
+        const rebounds = Number(reboundsRaw);
+        const assists = Number(assistsRaw);
+
+        if (!Number.isFinite(points)) {
+            throw new Error('Missing or invalid predicted_points');
         }
 
-        // Update each stat value
-        document.getElementById('predicted-points').textContent = predictionData.predicted_points.toFixed(1);
-        document.getElementById('predicted-assists').textContent = predictionData.predicted_assists.toFixed(1);
-        document.getElementById('predicted-rebounds').textContent = predictionData.predicted_rebounds.toFixed(1);
+        // Update header cells
+        const selectedPlayerName = playerSelect.options[playerSelect.selectedIndex]?.textContent || '';
+        const selectedOpponentName = teamSelect.options[teamSelect.selectedIndex]?.textContent || '';
+        predictedPlayerEl.textContent = selectedPlayerName;
+        predictedOpponentEl.textContent = selectedOpponentName;
+
+        // Update stat cells
+        predictedPtsEl.textContent = points.toFixed(1);
+        predictedRebEl.textContent = Number.isFinite(rebounds) ? rebounds.toFixed(1) : 'N/A';
+        predictedAstEl.textContent = Number.isFinite(assists) ? assists.toFixed(1) : 'N/A';
+
+        predictionStatus.textContent = '';
     }
     catch (error){
         console.error(`error during prediction`, error)
-        resultContainer.innerHTML = `<h2>Error getting prediction please try again</h2>`
+        predictionStatus.textContent = 'Error getting prediction. Please try again.';
     }
     })
