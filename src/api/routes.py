@@ -66,7 +66,8 @@ def get_player():
 
         cur.execute("""
                     SELECT 
-                        id, full_name, first_name, last_name, is_active
+                        id, full_name, first_name, last_name, is_active,
+                        position, height_inches, weight_lbs, age
                     FROM 
                         players 
                     ORDER BY 
