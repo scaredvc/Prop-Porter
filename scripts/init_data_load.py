@@ -2,23 +2,58 @@ import psycopg2
 import os
 from nba_api.stats.static import teams, players
 from nba_api.stats.endpoints import boxscoretraditionalv2
+from nba_api.stats.endpoints import commonplayerinfo
 from nba_api.stats.endpoints import leaguegamefinder
 import time
 import pandas as pd
 from requests.exceptions import Timeout, ConnectionError
 import random
-from typing import Optional
+from typing import Optional, List
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Retry configuration
-MAX_RETRIES = 3
-BASE_TIMEOUT = 120  # Increased timeout to 120 seconds
-RATE_LIMIT_MIN = 1.5  # Minimum seconds between requests
-RATE_LIMIT_MAX = 2.5  # Maximum seconds between requests
+# Configuration helpers to read env values safely
+def _get_env_int(name: str, default: int) -> int:
+    try:
+        value = os.getenv(name)
+        return int(value) if value is not None and value != '' else default
+    except Exception:
+        return default
 
-season_to_load = ['2023-24']
+def _get_env_float(name: str, default: float) -> float:
+    try:
+        value = os.getenv(name)
+        return float(value) if value is not None and value != '' else default
+    except Exception:
+        return default
+
+# Retry/rate-limit configuration (overridable via env)
+# API_MAX_RETRIES, API_BASE_TIMEOUT, API_RATE_LIMIT_MIN, API_RATE_LIMIT_MAX, API_COOL_OFF_ON_TIMEOUT
+MAX_RETRIES = _get_env_int("API_MAX_RETRIES", 3)
+BASE_TIMEOUT = _get_env_float("API_BASE_TIMEOUT", 45.0)  # seconds per attempt
+RATE_LIMIT_MIN = _get_env_float("API_RATE_LIMIT_MIN", 3.0)
+RATE_LIMIT_MAX = _get_env_float("API_RATE_LIMIT_MAX", 5.0)
+COOL_OFF_ON_TIMEOUT = _get_env_float("API_COOL_OFF_ON_TIMEOUT", 0.0)
+
+# Seasons to load, configurable via env: API_SEASONS="2021-22,2022-23,2023-24"
+def _parse_env_seasons(env_value: Optional[str]) -> List[str]:
+    if not env_value:
+        return ['2023-24']
+    seasons: List[str] = []
+    for raw in env_value.split(','):
+        s = raw.strip()
+        if not s:
+            continue
+        # Basic validation: expect YYYY-YY shape
+        if len(s) == 7 and s[4] == '-' and s[:4].isdigit() and s[5:].isdigit():
+            seasons.append(s)
+        else:
+            # If invalid, skip silently
+            continue
+    return seasons or ['2023-24']
+
+season_to_load: List[str] = _parse_env_seasons(os.getenv('API_SEASONS'))
 
 connection = psycopg2.connect(
     dbname = os.getenv("DB_NAME"),
@@ -35,12 +70,14 @@ def rate_limit_sleep():
     """Sleep for a random duration to avoid rate limiting"""
     time.sleep(random.uniform(RATE_LIMIT_MIN, RATE_LIMIT_MAX))
 
-def make_api_request(request_func, *args, **kwargs) -> pd.DataFrame:
+def make_api_request(request_func, *args, context_label: Optional[str] = None, **kwargs) -> pd.DataFrame:
     """Make an API request with retry logic"""
     for attempt in range(MAX_RETRIES):
         try:
-            if attempt > 0:
-                print(f"Retry attempt {attempt + 1}/{MAX_RETRIES}")
+            label = context_label or getattr(request_func, '__name__', str(request_func))
+            print(f"Attempt {attempt + 1}/{MAX_RETRIES} for {label}")
+            # Light rate limit before attempting call
+            time.sleep(random.uniform(max(0.0, RATE_LIMIT_MIN - 0.5), RATE_LIMIT_MIN))
             result = request_func(*args, **kwargs)
             if result is None:
                 raise ValueError("API request returned None")
@@ -50,10 +87,15 @@ def make_api_request(request_func, *args, **kwargs) -> pd.DataFrame:
             return df
         except Exception as e:
             if attempt == MAX_RETRIES - 1:
+                print(f"Final attempt failed: {str(e)}")
                 raise
             print(f"Request failed with error: {str(e)}")
-            # Exponential backoff
-            time.sleep((attempt + 1) * 2)
+            # Shorter backoff for transient network issues
+            if isinstance(e, (Timeout, ConnectionError)):
+                backoff_seconds = 1.0 + random.uniform(0, 1)
+            else:
+                backoff_seconds = (attempt + 1) * 2 + random.uniform(0, 1)
+            time.sleep(backoff_seconds)
     raise ValueError("Failed to get valid response after all retries")
 
 def load_players_data():
@@ -67,20 +109,102 @@ def load_players_data():
                 player_first_name = player["first_name"]
                 player_last_name = player["last_name"]
                 player_active_status = player["is_active"]
+                # Enrich with detailed info: position, height, weight, age
+                def _parse_height_to_inches(height_str: Optional[str]) -> Optional[int]:
+                    try:
+                        if not height_str:
+                            return None
+                        parts = str(height_str).split('-')
+                        if len(parts) != 2:
+                            return None
+                        feet = int(parts[0])
+                        inches = int(parts[1])
+                        return feet * 12 + inches
+                    except Exception:
+                        return None
+
+                def _parse_int_safe(value: object) -> Optional[int]:
+                    try:
+                        if value is None or value == '':
+                            return None
+                        return int(str(value).strip())
+                    except Exception:
+                        return None
+
+                def _calculate_age(birthdate_str: Optional[str]) -> Optional[int]:
+                    try:
+                        if not birthdate_str:
+                            return None
+                        # CommonPlayerInfo uses ISO-like format
+                        from datetime import datetime, timezone
+                        # Handle possible timezone suffix
+                        dt = datetime.fromisoformat(str(birthdate_str).replace('Z', '+00:00'))
+                        today = datetime.now(timezone.utc)
+                        age = today.year - dt.year - ((today.month, today.day) < (dt.month, dt.day))
+                        return age
+                    except Exception:
+                        return None
+
+                # Fetch details with retry/timeout
+                try:
+                    info_df = make_api_request(
+                        commonplayerinfo.CommonPlayerInfo,
+                        context_label=f"CommonPlayerInfo player_id={player_id}",
+                        player_id=player_id,
+                        timeout=BASE_TIMEOUT
+                    )
+                except Exception:
+                    info_df = pd.DataFrame()
+
+                position_val = None
+                height_inches_val = None
+                weight_lbs_val = None
+                age_val = None
+
+                if isinstance(info_df, pd.DataFrame) and not info_df.empty:
+                    # First table has basic info
+                    row0 = info_df.iloc[0]
+                    position_val = str(row0.get('POSITION') or '').strip() or None
+                    height_inches_val = _parse_height_to_inches(row0.get('HEIGHT'))
+                    weight_lbs_val = _parse_int_safe(row0.get('WEIGHT'))
+                    age_val = _calculate_age(row0.get('BIRTHDATE'))
 
                 sql_command = """
                 INSERT INTO players (
-                    id, 
-                    full_name, 
-                    first_name, 
-                    last_name, 
-                    is_active
-                    ) VALUES (%s,%s,%s,%s,%s) 
-                    ON CONFLICT (id) DO NOTHING;
+                    id,
+                    full_name,
+                    first_name,
+                    last_name,
+                    is_active,
+                    position,
+                    height_inches,
+                    weight_lbs,
+                    age
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (id) DO UPDATE SET
+                    full_name = EXCLUDED.full_name,
+                    first_name = EXCLUDED.first_name,
+                    last_name = EXCLUDED.last_name,
+                    is_active = EXCLUDED.is_active,
+                    position = COALESCE(EXCLUDED.position, players.position),
+                    height_inches = COALESCE(EXCLUDED.height_inches, players.height_inches),
+                    weight_lbs = COALESCE(EXCLUDED.weight_lbs, players.weight_lbs),
+                    age = COALESCE(EXCLUDED.age, players.age);
                 """
 
-                values_to_insert = (player_id, player_full_name, player_first_name, player_last_name, player_active_status)
+                values_to_insert = (
+                    player_id,
+                    player_full_name,
+                    player_first_name,
+                    player_last_name,
+                    player_active_status,
+                    position_val,
+                    height_inches_val,
+                    weight_lbs_val,
+                    age_val,
+                )
                 cur.execute(sql_command, values_to_insert)
+                rate_limit_sleep()
                 
         connection.commit()
         print("Done loading players")
@@ -217,6 +341,9 @@ def load_games_data():
         connection.rollback()
         raise
 
+
+# Odds API ingestion removed as per cleanup decision (left intentionally empty)
+
 def convert_time_to_minutes(time_str):
     if not time_str or time_str == '':
         return 0
@@ -237,10 +364,19 @@ def load_player_game_stats():
         processed_games = {row[0] for row in cur.fetchall()}
         print(f"Found {len(processed_games)} already processed games")
 
-        from_games_table = """
+        def _season_str_to_season_id(season_str: str) -> int:
+            """Convert season like '2023-24' to numeric season_id 22023 used in DB."""
+            try:
+                start_year = int(season_str[:4])
+                return 22000 + start_year - 2000
+            except Exception:
+                return 22023
+
+        season_ids_clause = ','.join(str(_season_str_to_season_id(s)) for s in season_to_load)
+        from_games_table = f"""
             SELECT DISTINCT game_id
             FROM games
-            WHERE season_id IN (22023)
+            WHERE season_id IN ({season_ids_clause})
         """
 
         cur.execute(from_games_table)
@@ -262,6 +398,7 @@ def load_player_game_stats():
                         try:
                             player_games = make_api_request(
                                 boxscoretraditionalv2.BoxScoreTraditionalV2,
+                                context_label=f"BoxScoreTraditionalV2 game_id={game_id}",
                                 game_id=game_id,
                                 timeout=BASE_TIMEOUT
                             )
@@ -323,6 +460,13 @@ def load_player_game_stats():
                             
                         except Exception as e:
                             print(f'Error processing game {game_id}: {str(e)}')
+                            # Optional cool-off after network timeouts before moving on
+                            if isinstance(e, (Timeout, ConnectionError)) and COOL_OFF_ON_TIMEOUT > 0:
+                                try:
+                                    print(f'Cooling off for {COOL_OFF_ON_TIMEOUT} seconds due to timeout...')
+                                    time.sleep(COOL_OFF_ON_TIMEOUT)
+                                except Exception:
+                                    pass
                             # Continue with next game instead of failing completely
                             continue
 
