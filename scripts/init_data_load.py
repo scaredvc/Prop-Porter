@@ -124,6 +124,20 @@ def load_games_data():
 
         active_teams = teams.get_teams()
         valid_teams_set = {team['id'] for team in active_teams}
+        abbr_to_id = {team['abbreviation']: team['id'] for team in active_teams}
+
+        def parse_matchup(matchup_str: str):
+            # Expected formats: "LAL vs. GSW" (home) or "LAL @ GSW" (away)
+            try:
+                parts = str(matchup_str).split()
+                if len(parts) >= 3:
+                    # parts[0] = team abbr, parts[1] = 'vs.' or '@', parts[2] = opponent abbr
+                    is_home_local = True if parts[1] == 'vs.' else False if parts[1] == '@' else None
+                    opponent_abbr_local = parts[2]
+                    return is_home_local, opponent_abbr_local
+            except Exception:
+                pass
+            return None, None
 
         for season in season_to_load:
                 game_finder = leaguegamefinder.LeagueGameFinder(season_nullable=season)
@@ -136,6 +150,9 @@ def load_games_data():
                         if row['TEAM_ID'] not in valid_teams_set:
                             continue
                     
+                        is_home, opponent_abbr = parse_matchup(row['MATCHUP'])
+                        opponent_team_id = abbr_to_id.get(opponent_abbr) if opponent_abbr else None
+
                         game_data = {
                             'season_id': row['SEASON_ID'],
                             'team_id': row['TEAM_ID'],
@@ -143,6 +160,8 @@ def load_games_data():
                             'game_id': row['GAME_ID'],
                             'game_date': row['GAME_DATE'],
                             'matchup': row['MATCHUP'],
+                            'is_home': is_home,
+                            'opponent_team_id': opponent_team_id,
                             'win_loss': row['WL'],
                             'minutes': row['MIN'],
                             'points': row['PTS'],
@@ -168,20 +187,22 @@ def load_games_data():
                         
                         sql_command = """
                             INSERT INTO games (
-                                season_id, team_id, team_abbreviation, game_id, game_date, 
-                                matchup, win_loss, minutes, points, fgm,
+                                season_id, team_id, team_abbreviation, game_id, game_date,
+                                matchup, opponent_team_id, is_home,
+                                win_loss, minutes, points, fgm,
                                 fga, fg_pct, fg3m, fg3a, fg3_pct,
                                 ftm, fta, ft_pct, oreb, dreb,
                                 reb, ast, stl, blk, tov,
                                 pf, plus_minus
 
                             ) VALUES (
-                            %(season_id)s, %(team_id)s, %(team_abbreviation)s, %(game_id)s, %(game_date)s,
-                            %(matchup)s, %(win_loss)s, %(minutes)s, %(points)s, %(fgm)s,
-                            %(fga)s, %(fg_pct)s, %(fg3m)s, %(fg3a)s, %(fg3_pct)s,
-                            %(ftm)s, %(fta)s, %(ft_pct)s, %(oreb)s, %(dreb)s,
-                            %(reb)s, %(ast)s, %(stl)s, %(blk)s, %(tov)s,
-                            %(pf)s, %(plus_minus)s
+                                %(season_id)s, %(team_id)s, %(team_abbreviation)s, %(game_id)s, %(game_date)s,
+                                %(matchup)s, %(opponent_team_id)s, %(is_home)s,
+                                %(win_loss)s, %(minutes)s, %(points)s, %(fgm)s,
+                                %(fga)s, %(fg_pct)s, %(fg3m)s, %(fg3a)s, %(fg3_pct)s,
+                                %(ftm)s, %(fta)s, %(ft_pct)s, %(oreb)s, %(dreb)s,
+                                %(reb)s, %(ast)s, %(stl)s, %(blk)s, %(tov)s,
+                                %(pf)s, %(plus_minus)s
                             )
                             ON CONFLICT (game_id, team_id) DO NOTHING;
                         """
@@ -261,6 +282,8 @@ def load_player_game_stats():
                                         'minutes': convert_time_to_minutes(game['MIN']),
                                         'points': 0 if pd.isna(game['PTS']) else game['PTS'],
                                         'rebounds': 0 if pd.isna(game['REB']) else game['REB'],
+                                        'oreb': 0 if pd.isna(game.get('OREB')) else game.get('OREB'),
+                                        'dreb': 0 if pd.isna(game.get('DREB')) else game.get('DREB'),
                                         'assists': 0 if pd.isna(game['AST']) else game['AST'],
                                         'steals': 0 if pd.isna(game['STL']) else game['STL'],
                                         'blocks': 0 if pd.isna(game['BLK']) else game['BLK'],
@@ -273,20 +296,21 @@ def load_player_game_stats():
                                         'fg3_pct': 0 if pd.isna(game['FG3_PCT']) else game['FG3_PCT'],
                                         'ftm': 0 if pd.isna(game['FTM']) else game['FTM'],
                                         'fta': 0 if pd.isna(game['FTA']) else game['FTA'],
-                                        'ft_pct': 0 if pd.isna(game['FT_PCT']) else game['FT_PCT']
+                                        'ft_pct': 0 if pd.isna(game['FT_PCT']) else game['FT_PCT'],
+                                        'starter': bool(str(game.get('START_POSITION', '') or '').strip())
                                     }
                                     
                                     sql_command = """
                                         INSERT INTO player_game_stats (
                                             player_id, game_id, team_id, minutes, points,
-                                            rebounds, assists, steals, blocks, turnovers,
+                                            rebounds, oreb, dreb, assists, steals, blocks, turnovers,
                                             fgm, fga, fg_pct, fg3m, fg3a, fg3_pct,
-                                            ftm, fta, ft_pct
+                                            ftm, fta, ft_pct, starter
                                         ) VALUES (
                                             %(player_id)s, %(game_id)s, %(team_id)s, %(minutes)s, %(points)s,
-                                            %(rebounds)s, %(assists)s, %(steals)s, %(blocks)s, %(turnovers)s,
+                                            %(rebounds)s, %(oreb)s, %(dreb)s, %(assists)s, %(steals)s, %(blocks)s, %(turnovers)s,
                                             %(fgm)s, %(fga)s, %(fg_pct)s, %(fg3m)s, %(fg3a)s, %(fg3_pct)s,
-                                            %(ftm)s, %(fta)s, %(ft_pct)s
+                                            %(ftm)s, %(fta)s, %(ft_pct)s, %(starter)s
                                         )
                                         ON CONFLICT (player_id, game_id) DO NOTHING;
                                     """
