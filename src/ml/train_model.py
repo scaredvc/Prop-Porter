@@ -33,7 +33,12 @@ def create_training_dataframe() -> pd.DataFrame:
                 g1.game_id,
                 g1.team_id,
                 g2.team_id AS opponent_team_id,
-                g2.points AS opponent_points
+                g2.points AS opponent_points,
+                -- Opponent box score for pace estimation
+                g2.fga  AS opponent_fga,
+                g2.oreb AS opponent_oreb,
+                g2.tov  AS opponent_tov,
+                g2.fta  AS opponent_fta
             FROM games g1
             JOIN games g2 ON g1.game_id = g2.game_id AND g1.team_id != g2.team_id
         )
@@ -44,8 +49,17 @@ def create_training_dataframe() -> pd.DataFrame:
             pgs.minutes,
             pgs.points AS player_points,
             g.game_date,
+            -- Player team box score for pace estimation
+            g.fga  AS team_fga,
+            g.oreb AS team_oreb,
+            g.tov  AS team_tov,
+            g.fta  AS team_fta,
             go.opponent_team_id,
-            go.opponent_points AS points_allowed
+            go.opponent_points AS points_allowed,
+            go.opponent_fga,
+            go.opponent_oreb,
+            go.opponent_tov,
+            go.opponent_fta
         FROM player_game_stats pgs
         JOIN games g ON pgs.game_id = g.game_id AND pgs.team_id = g.team_id
         JOIN game_opponents go ON pgs.game_id = go.game_id AND pgs.team_id = go.team_id
@@ -99,15 +113,62 @@ def feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
     df.drop(columns=["prev_game_date"], inplace=True)
 
     # Opponent defensive strength
-    df = df.sort_values(by=["opponent_team_id", "game_date"])  # order for opponent rollups
-    df["opponent_avg_points_allowed_last_10"] = (
-        df.groupby("opponent_team_id")["points_allowed"].transform(lambda s: s.rolling(window=10, min_periods=1).mean().shift(1))
+    # Build team-level frame to compute opponent features without leakage
+    team_cols = [
+        "team_id", "game_id", "game_date", "points_allowed",
+        "team_fga", "team_oreb", "team_tov", "team_fta",
+    ]
+    team_level = (
+        df[team_cols]
+        .drop_duplicates(subset=["team_id", "game_id"])  # one row per team-game
+        .sort_values(["team_id", "game_date"])  # ensure order
+        .copy()
     )
-    # Data-driven fallback: per-opponent historical mean, then global mean
-    per_opp_mean = df.groupby("opponent_team_id")["points_allowed"].transform("mean")
-    global_mean = df["points_allowed"].mean()
-    df["opponent_avg_points_allowed_last_10"].fillna(per_opp_mean, inplace=True)
-    df["opponent_avg_points_allowed_last_10"].fillna(global_mean, inplace=True)
+    # Possessions proxy for team
+    team_level["team_possessions"] = (
+        team_level["team_fga"].astype(float)
+        - team_level["team_oreb"].astype(float)
+        + team_level["team_tov"].astype(float)
+        + 0.44 * team_level["team_fta"].astype(float)
+    )
+    # Rolling defense and pace for each team (shifted to avoid leakage)
+    team_level["team_points_allowed_rm10"] = (
+        team_level.groupby("team_id")["points_allowed"].transform(lambda s: s.rolling(window=10, min_periods=1).mean().shift(1))
+    )
+    team_level["team_possessions_rm10"] = (
+        team_level.groupby("team_id")["team_possessions"].transform(lambda s: s.rolling(window=10, min_periods=1).mean().shift(1))
+    )
+
+    # Opponent features: map opponent_team_id to its rolling series at this game_id
+    opp_features = team_level[[
+        "team_id", "game_id", "team_points_allowed_rm10", "team_possessions_rm10"
+    ]].rename(columns={
+        "team_id": "opponent_team_id",
+        "team_points_allowed_rm10": "opponent_avg_points_allowed_last_10",
+        "team_possessions_rm10": "opponent_possessions_last_10",
+    })
+    df = df.merge(
+        opp_features,
+        on=["opponent_team_id", "game_id"],
+        how="left",
+    )
+
+    # Fallbacks for missing opponent features
+    # Per-opponent historical means, then global means
+    per_opp_def_mean = df.groupby("opponent_team_id")["points_allowed"].transform("mean")
+    global_def_mean = df["points_allowed"].mean()
+    df["opponent_avg_points_allowed_last_10"].fillna(per_opp_def_mean, inplace=True)
+    df["opponent_avg_points_allowed_last_10"].fillna(global_def_mean, inplace=True)
+
+    # For pace, use opponent's average possessions if available; else fallback to overall mean
+    # Compute opponent possessions at the game level from opponent box scores if missing
+    if "opponent_possessions_last_10" not in df.columns:
+        df["opponent_possessions_last_10"] = np.nan
+    global_poss_mean = (
+        (df["opponent_fga"].astype(float) - df["opponent_oreb"].astype(float) + df["opponent_tov"].astype(float) + 0.44 * df["opponent_fta"].astype(float))
+        .mean()
+    ) if {"opponent_fga", "opponent_oreb", "opponent_tov", "opponent_fta"}.issubset(df.columns) else np.nan
+    df["opponent_possessions_last_10"].fillna(global_poss_mean, inplace=True)
 
     df = df.sort_values(by=["player_id", "game_date"]).reset_index(drop=True)
     print("feature engineering complete")
@@ -133,6 +194,7 @@ def train_model(df: pd.DataFrame):
         "ppm_ewm_span_10",
         "days_rest",
         "opponent_avg_points_allowed_last_10",
+        "opponent_possessions_last_10",
     ]
     target = "player_points"
 
