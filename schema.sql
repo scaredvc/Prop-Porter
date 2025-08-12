@@ -17,7 +17,7 @@ CREATE TABLE players (
     first_name VARCHAR(255),
     last_name VARCHAR(255),
     is_active BOOLEAN,
-    position VARCHAR(10),
+    position VARCHAR(20),
     height_inches INTEGER,
     weight_lbs INTEGER,
     age INTEGER
