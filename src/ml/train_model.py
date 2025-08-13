@@ -49,6 +49,7 @@ def create_training_dataframe() -> pd.DataFrame:
             pgs.minutes,
             pgs.points AS player_points,
             g.game_date,
+            g.is_home,
             -- Player team box score for pace estimation
             g.fga  AS team_fga,
             g.oreb AS team_oreb,
@@ -170,6 +171,20 @@ def feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
     ) if {"opponent_fga", "opponent_oreb", "opponent_tov", "opponent_fta"}.issubset(df.columns) else np.nan
     df["opponent_possessions_last_10"].fillna(global_poss_mean, inplace=True)
 
+    # Defensive rating proxy: 100 * (opponent points allowed / opponent possessions)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        df["opponent_def_rating_last_10"] = 100.0 * (
+            df["opponent_avg_points_allowed_last_10"] / df["opponent_possessions_last_10"]
+        )
+    df["opponent_def_rating_last_10"].replace([np.inf, -np.inf], np.nan, inplace=True)
+    # Fallbacks for def rating
+    global_defrt_mean = df["opponent_def_rating_last_10"].mean()
+    df["opponent_def_rating_last_10"].fillna(global_defrt_mean, inplace=True)
+
+    # Home/away numeric encoding
+    if "is_home" in df.columns:
+        df["is_home"] = df["is_home"].astype("int32")
+
     df = df.sort_values(by=["player_id", "game_date"]).reset_index(drop=True)
     print("feature engineering complete")
     return df
@@ -195,6 +210,8 @@ def train_model(df: pd.DataFrame):
         "days_rest",
         "opponent_avg_points_allowed_last_10",
         "opponent_possessions_last_10",
+        "opponent_def_rating_last_10",
+        "is_home",
     ]
     target = "player_points"
 
@@ -203,7 +220,9 @@ def train_model(df: pd.DataFrame):
     if not features:
         raise ValueError("No valid features available for training.")
 
-    # Drop rows with missing in used columns
+    # Drop rows with missing in used columns, after filtering low minutes
+    if "minutes" in df.columns:
+        df = df[df["minutes"] >= 15]
     df_clean = df.dropna(subset=features + [target]).copy()
 
     # Time-based split
