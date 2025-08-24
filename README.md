@@ -6,18 +6,30 @@ NBA Player Stat Predictor - AI-powered basketball analytics platform.
 
 ```
 Prop-Porter/
-├── frontend-nextjs/        # Next.js React Frontend
-│   ├── src/               # React components and pages
-│   ├── package.json       # Frontend dependencies
-│   └── ...               # Next.js configuration files
 ├── backend/               # Python Backend API
-│   ├── src/              # Python source code
+│   ├── api/              # Flask API code
+│   │   ├── __init__.py   # Flask app initialization
+│   │   ├── routes.py     # API endpoints
+│   │   ├── server.py     # Server entry point
+│   │   └── utils.py      # Database utilities
+│   ├── core/             # Core backend modules
+│   ├── data/             # Data handling modules
+│   ├── ml/               # Machine learning code
 │   ├── requirements.txt  # Python dependencies
-│   └── schema.sql       # Database schema
-├── frontend/             # Legacy vanilla JS frontend (backup)
+│   ├── schema.sql       # Database schema
+│   └── venv/            # Virtual environment
+├── frontend-nextjs/       # Next.js React Frontend
+│   ├── src/
+│   │   ├── app/         # Next.js app router
+│   │   ├── components/  # React components
+│   │   └── lib/         # Utility libraries
+│   ├── package.json     # Frontend dependencies
+│   └── ...              # Next.js configuration files
 ├── docs/                 # Documentation and notes
 ├── scripts/              # Utility scripts
-└── tests/                # Test files
+├── tests/                # Test files
+├── player_points_predictor.pkl  # ML model file
+└── venv/                 # Project virtual environment
 ```
 
 ## 🚀 Quick Start
@@ -34,7 +46,7 @@ Open [http://localhost:3000](http://localhost:3000)
 ```bash
 cd backend
 pip install -r requirements.txt
-# Start your backend server
+python api/server.py
 ```
 
 ## 🔧 Development
