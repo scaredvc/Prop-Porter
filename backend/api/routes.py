@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 from . import app
 from .utils import get_db_connection
 
-try: 
-    model = joblib.load("player_points_predictor.pkl")
+try:
+    model = joblib.load("../player_points_predictor.pkl")
     print("Model loaded successfully")
 except FileNotFoundError:
     print("Model not found")
@@ -34,7 +34,7 @@ def get_teams():
                         full_name, abbreviation, nickname, city, state, year_founded 
                     FROM 
                         teams 
-                    ORDER BY 
+                    ORDER BY
                         full_name;
                     """)
         result = cur.fetchall()
@@ -78,7 +78,7 @@ def get_player():
         
         if result and cur.description:
             columns = [desc[0] for desc in cur.description]
-            player_list = [dict(zip(columns,row))for row in result]
+            player_list = [dict(zip(columns, row)) for row in result]
 
         cur.close()
 
