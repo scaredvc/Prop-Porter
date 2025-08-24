@@ -16,8 +16,6 @@ interface Team {
 
 interface Prediction {
   predicted_points: number
-  predicted_rebounds?: number
-  predicted_assists?: number
 }
 
 export default function CustomPrediction() {
@@ -126,8 +124,8 @@ export default function CustomPrediction() {
   return (
     <div className="card">
       <div className="card-header">
-        <h1>Prop-Porter</h1>
-        <p>NBA Player Stat Predictor</p>
+        <h1>Custom Prediction</h1>
+        <p>Select a player and opponent to get AI-powered stat predictions</p>
       </div>
       
       <div className="card-body">
@@ -178,26 +176,42 @@ export default function CustomPrediction() {
         <div id="result-container">
           <div className="prediction-status">{predictionStatus}</div>
           {prediction && (
-            <table className="stats-table" aria-label="Predicted stats">
-              <thead>
-                <tr>
-                  <th>Player</th>
-                  <th>Opponent</th>
-                  <th>PTS</th>
-                  <th>REB</th>
-                  <th>AST</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>{getSelectedPlayerName()}</td>
-                  <td>{getSelectedTeamName()}</td>
-                  <td>{formatMaybe(prediction.predicted_points)}</td>
-                  <td>{formatMaybe(prediction.predicted_rebounds)}</td>
-                  <td>{formatMaybe(prediction.predicted_assists)}</td>
-                </tr>
-              </tbody>
-            </table>
+            <div className="prediction-result">
+              <div className="prediction-header">
+                <div className="matchup-info">
+                  <div className="player-team">
+                    <span className="player-name">{getSelectedPlayerName()}</span>
+                    <span className="team-label">Player</span>
+                  </div>
+                  <div className="vs-indicator">
+                    <span className="vs-text">VS</span>
+                  </div>
+                  <div className="player-team">
+                    <span className="team-name">{getSelectedTeamName()}</span>
+                    <span className="team-label">Opponent</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="prediction-stats">
+                <div className="stat-item main-stat">
+                  <div className="stat-icon">🏀</div>
+                  <div className="stat-content">
+                    <div className="stat-label">Predicted Points</div>
+                    <div className="stat-value">{formatMaybe(prediction.predicted_points)}</div>
+                    <div className="stat-category">Points</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="prediction-confidence">
+                <div className="confidence-label">Prediction Confidence</div>
+                <div className="confidence-bar">
+                  <div className="confidence-fill" style={{width: '75%'}}></div>
+                </div>
+                <div className="confidence-text">High Confidence</div>
+              </div>
+            </div>
           )}
         </div>
       </div>

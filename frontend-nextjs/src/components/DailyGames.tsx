@@ -70,7 +70,7 @@ export default function DailyGames() {
       <div className="card">
         <div className="card-header">
           <h1>Today&apos;s Games</h1>
-          <p>{formatDate(new Date())}</p>
+          <p>Live predictions for {formatDate(new Date())}</p>
         </div>
         <div className="card-body">
           <div className="loading">Loading today&apos;s games...</div>
@@ -84,7 +84,7 @@ export default function DailyGames() {
       <div className="card">
         <div className="card-header">
           <h1>Today&apos;s Games</h1>
-          <p>{formatDate(new Date())}</p>
+          <p>Live predictions for {formatDate(new Date())}</p>
         </div>
         <div className="card-body">
           <div className="error-message">
@@ -101,7 +101,7 @@ export default function DailyGames() {
       <div className="card">
         <div className="card-header">
           <h1>Today&apos;s Games</h1>
-          <p>{formatDate(new Date())}</p>
+          <p>Live predictions for {formatDate(new Date())}</p>
         </div>
         <div className="card-body">
           <div className="no-games">No games scheduled for today</div>
@@ -114,7 +114,7 @@ export default function DailyGames() {
     <div className="card">
       <div className="card-header">
         <h1>Today&apos;s Games</h1>
-        <p>{formatDate(new Date())}</p>
+        <p>Live predictions for {formatDate(new Date())}</p>
       </div>
       
       <div className="card-body">

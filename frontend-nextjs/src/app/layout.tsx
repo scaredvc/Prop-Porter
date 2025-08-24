@@ -5,8 +5,8 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Prop-Porter AI',
-  description: 'NBA Player Stat Predictor',
+  title: 'Prop-Porter | NBA Stat Predictor',
+  description: 'Advanced NBA player performance predictions powered by machine learning. Get non accurate point, rebound, and assist predictions for your favorite players.',
 }
 
 export default function RootLayout({

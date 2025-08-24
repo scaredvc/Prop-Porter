@@ -9,18 +9,32 @@ export default function Home() {
 
   return (
     <main className="container">
+      {/* Brand Header */}
+      <div className="brand-header">
+        <div className="brand-logo">
+          <span className="logo-icon">🏀</span>
+          <span className="logo-text">Prop-Porter</span>
+        </div>
+        <div className="brand-tagline">
+          <span className="tagline-text">Malik Beasley didn't gamble, he bet on himself</span>
+          <div className="tagline-accent"></div>
+        </div>
+      </div>
+
       {/* Mode Toggle */}
       <div className="mode-toggle">
-        <button 
+        <button
           className={`mode-button ${mode === 'custom' ? 'active' : ''}`}
           onClick={() => setMode('custom')}
         >
+          <span className="button-icon">🎯</span>
           Custom Prediction
         </button>
-        <button 
+        <button
           className={`mode-button ${mode === 'daily' ? 'active' : ''}`}
           onClick={() => setMode('daily')}
         >
+          <span className="button-icon">📅</span>
           Today&apos;s Games
         </button>
       </div>
