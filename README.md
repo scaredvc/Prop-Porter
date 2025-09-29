@@ -59,13 +59,3 @@ python api/server.py
 
 - See `docs/` folder for detailed migration notes and development guides
 - API documentation available in backend code
-
-## 🤝 Contributing
-
-1. Frontend changes: Work in `frontend-nextjs/`
-2. Backend changes: Work in `backend/`
-3. Keep documentation updated in `docs/`
-
-## 📝 License
-
-[Your License Here]
