@@ -64,6 +64,13 @@ IDE / Editor specific
 
 models/
 *.pkl
+*.joblib
+
+# Legacy/test virtual environments
+test_env/
+
+# Accidental files
+nul
 
 # Next.js
 .next/
@@ -71,9 +78,6 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# Documentation (personal notes)
-docs/
 
 # Environment variables
 .env.local
