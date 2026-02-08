@@ -61,16 +61,31 @@ def _parse_env_seasons(env_value: Optional[str]) -> List[str]:
 
 season_to_load: List[str] = _parse_env_seasons(os.getenv('API_SEASONS'))
 
-connection = psycopg2.connect(
-    dbname = os.getenv("DB_NAME"),
-    user = os.getenv("DB_USER"),
-    password = os.getenv("DB_PASSWORD"),
-    host = os.getenv("DB_HOST"),
-    port = os.getenv("DB_PORT"),
-)
+_connection = None
+_cursor = None
 
-cur = connection.cursor()
-print("connected to database")
+
+def get_connection():
+    """Lazily create and cache a database connection."""
+    global _connection
+    if _connection is None or _connection.closed:
+        _connection = psycopg2.connect(
+            dbname=os.getenv("DB_NAME"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            host=os.getenv("DB_HOST"),
+            port=os.getenv("DB_PORT"),
+        )
+        print("connected to database")
+    return _connection
+
+
+def get_cursor():
+    """Lazily create and cache a cursor from the connection."""
+    global _cursor
+    if _cursor is None or _cursor.closed:
+        _cursor = get_connection().cursor()
+    return _cursor
 
 def rate_limit_sleep():
     """Sleep for a random duration to avoid rate limiting"""
@@ -111,8 +126,8 @@ def load_players_data():
 
         # Identify which players actually need enrichment (position/height/weight/age missing)
         refresh_all_meta = _get_env_bool("API_REFRESH_PLAYER_META", False)
-        cur.execute("SELECT id, position, height_inches, weight_lbs, age FROM players")
-        rows = cur.fetchall()
+        get_cursor().execute("SELECT id, position, height_inches, weight_lbs, age FROM players")
+        rows = get_cursor().fetchall()
         ids_needing_meta = set()
         existing_meta = {r[0]: (r[1], r[2], r[3], r[4]) for r in rows}
         for pid, (pos, h, w, age) in existing_meta.items():
@@ -123,14 +138,14 @@ def load_players_data():
         # Detect DB VARCHAR limit for players.position so we can truncate safely
         position_limit: Optional[int] = None
         try:
-            cur.execute(
+            get_cursor().execute(
                 """
                 SELECT character_maximum_length
                 FROM information_schema.columns
                 WHERE table_schema = 'public' AND table_name = 'players' AND column_name = 'position'
                 """
             )
-            row = cur.fetchone()
+            row = get_cursor().fetchone()
             if row and row[0]:
                 position_limit = int(row[0])
         except Exception:
@@ -243,16 +258,16 @@ def load_players_data():
                     weight_lbs_val,
                     age_val,
                 )
-                cur.execute(sql_command, values_to_insert)
+                get_cursor().execute(sql_command, values_to_insert)
                 if should_fetch_meta:
                     rate_limit_sleep()
-                
-        connection.commit()
+
+        get_connection().commit()
         print("Done loading players")
-        
+
     except Exception as e:
         print(f'Fatal error in load_players_data: {str(e)}')
-        connection.rollback()
+        get_connection().rollback()
         raise
 
 def load_teams_data():
@@ -274,14 +289,14 @@ def load_teams_data():
                     ON CONFLICT (id) DO NOTHING;
                 """ 
                 values_to_insert = (team['id'], team['full_name'], team['abbreviation'], team['nickname'], team['city'], team['state'], team['year_founded'])
-                cur.execute(sql_command, values_to_insert)
-                
-        connection.commit()
+                get_cursor().execute(sql_command, values_to_insert)
+
+        get_connection().commit()
         print('Done loading teams')
-        
+
     except Exception as e:
         print(f'Fatal error in load_teams_data: {str(e)}')
-        connection.rollback()
+        get_connection().rollback()
         raise
 
 def load_games_data():
@@ -377,7 +392,7 @@ def load_games_data():
                             ON CONFLICT (game_id, team_id) DO NOTHING;
                         """
 
-                        cur.execute(sql_command, game_data)
+                        get_cursor().execute(sql_command, game_data)
                 except Exception as e:
                         print(f"Error loading games for {season}: {str(e)}")
                         if isinstance(e, (Timeout, ConnectionError)) and COOL_OFF_ON_TIMEOUT > 0:
@@ -389,12 +404,12 @@ def load_games_data():
                         # continue with next season
                         continue
                         
-        connection.commit()
+        get_connection().commit()
         print(f'Done loading games for {season}')
-        
+
     except Exception as e:
         print(f'Fatal error in load_games_data: {str(e)}')
-        connection.rollback()
+        get_connection().rollback()
         raise
 
 
@@ -411,13 +426,13 @@ def convert_time_to_minutes(time_str):
 
 def load_player_game_stats():
     try:
-        cur.execute("SELECT id FROM players")
-        active_player_ids = {row[0] for row in cur.fetchall()}
+        get_cursor().execute("SELECT id FROM players")
+        active_player_ids = {row[0] for row in get_cursor().fetchall()}
         print(f"Active player IDs: {len(active_player_ids)} players found")
 
         # Get already processed games
-        cur.execute("SELECT DISTINCT game_id FROM player_game_stats")
-        processed_games = {row[0] for row in cur.fetchall()}
+        get_cursor().execute("SELECT DISTINCT game_id FROM player_game_stats")
+        processed_games = {row[0] for row in get_cursor().fetchall()}
         print(f"Found {len(processed_games)} already processed games")
 
         def _season_str_to_season_id(season_str: str) -> int:
@@ -435,8 +450,8 @@ def load_player_game_stats():
             WHERE season_id IN ({season_ids_clause})
         """
 
-        cur.execute(from_games_table)
-        all_games = cur.fetchall()
+        get_cursor().execute(from_games_table)
+        all_games = get_cursor().fetchall()
         total_games = len(all_games)
         print(f"Processing {total_games} games")
 
@@ -508,10 +523,10 @@ def load_player_game_stats():
                                 ON CONFLICT (player_id, game_id) DO NOTHING;
                             """
                             
-                            cur.execute(sql_command, game_data)
-                            
+                            get_cursor().execute(sql_command, game_data)
+
                     # Commit after each game to save progress
-                    connection.commit()
+                    get_connection().commit()
                     print(f'Successfully processed game {game_id}')
                     
                 except Exception as e:
@@ -530,7 +545,7 @@ def load_player_game_stats():
         
     except Exception as e:
         print(f'Fatal error in load_player_game_stats: {str(e)}')
-        connection.rollback()
+        get_connection().rollback()
         raise
 
 
@@ -543,11 +558,11 @@ if __name__ == "__main__":
 
     except Exception as e:
         print(f'Fatal error in main execution: {str(e)}')
-        connection.rollback()
+        get_connection().rollback()
 
     finally:
-        if cur is not None:
-            cur.close()
-        if connection is not None:
-            connection.close()
+        if _cursor is not None:
+            _cursor.close()
+        if _connection is not None:
+            _connection.close()
         print("Connection to database closed")

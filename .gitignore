@@ -62,9 +62,24 @@ IDE / Editor specific
 .vscode/
 *.swp
 
-models/
+# Model artifacts (track directory structure via .gitkeep)
+models/*
+!models/.gitkeep
 *.pkl
 *.joblib
+
+# Data files (track directory structure via .gitkeep)
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+data/lines/*
+!data/lines/.gitkeep
+data/llm/*
+!data/llm/.gitkeep
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
 
 # Legacy/test virtual environments
 test_env/

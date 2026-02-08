@@ -28,27 +28,27 @@ This file breaks the project into small, actionable steps.
 
 ## Phase 1 — Repo & Environment Setup
 
-- [ ] Create directory structure:
-  - [ ] `/data/raw`
-  - [ ] `/data/processed`
-  - [ ] `/data/lines`
-  - [ ] `/data/llm`
-  - [ ] `/models`
-  - [ ] `/src`
-  - [ ] `/notebooks`
-  - [ ] `/grok_prompts`
-  - [ ] `/scripts`
-  - [ ] `/docs`
-- [ ] Initialize git repo.
-- [ ] Create `requirements.txt` with at least:
-  - [ ] `pandas`
-  - [ ] `numpy`
-  - [ ] `scikit-learn`
-  - [ ] `joblib`
-  - [ ] `python-dotenv`
-  - [ ] `requests` (or Grok SDK)
-- [ ] Create and activate virtual environment.
-- [ ] Install dependencies from `requirements.txt`.
+- [x] Create directory structure:
+  - [x] `/data/raw`
+  - [x] `/data/processed`
+  - [x] `/data/lines`
+  - [x] `/data/llm`
+  - [x] `/models`
+  - [x] `/src`
+  - [x] `/notebooks`
+  - [x] `/grok_prompts`
+  - [x] `/scripts`
+  - [x] `/docs`
+- [x] Initialize git repo.
+- [x] Create `requirements.txt` with at least:
+  - [x] `pandas`
+  - [x] `numpy`
+  - [x] `scikit-learn`
+  - [x] `joblib`
+  - [x] `python-dotenv`
+  - [x] `requests` (or Grok SDK)
+- [x] Create and activate virtual environment.
+- [x] Install dependencies from `requirements.txt`.
 
 ---
 
