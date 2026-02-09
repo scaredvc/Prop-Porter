@@ -1,9 +1,9 @@
 ﻿# PRD: Prop-Porter Pivot v1 - Hybrid NBA Player Points Prediction
 
 ## Document Control
-- Version: 1.0
+- Version: 1.1
 - Status: Execution draft
-- Date: 2026-02-06
+- Date: 2026-02-09
 - Product owner: Prop-Porter maintainer
 - Engineering owner: Backend and ML leads
 - Scope horizon: v1 pivot (6 weeks)
@@ -45,13 +45,13 @@ Business need:
 ## 4. Non-Goals (v1)
 - Predicting rebounds, assists, or fantasy composite stats.
 - Real-time in-game updates.
-- Supabase migration during initial v1 delivery.
+- Full backend replatform beyond the DB migration.
 - Public custom player prediction flow.
 
 ## 5. Locked Decisions
 1. In-place pivot in this repo, no full restart.
 2. Postgres-first data path for v1.
-3. AWS-first infrastructure for v1; Supabase explicitly deferred.
+3. Supabase Postgres is the v1 managed database target; app runtime hosting remains flexible.
 4. Grok is primary LLM provider for lines and feature-based scoring.
 5. Daily slate timezone is America/New_York (ET).
 6. Custom prediction endpoint is internal-only in v1.
@@ -381,7 +381,7 @@ Definition of done:
 
 ## 16. Dependencies
 - Grok API key and rate limits.
-- Stable AWS Postgres connectivity.
+- Stable Supabase Postgres connectivity.
 - Schedule source availability before run window.
 
 ## 17. Open Items Requiring Confirmation
@@ -392,6 +392,6 @@ Definition of done:
 ## 18. Out-of-Scope Backlog (Post-v1)
 - Injury-aware features and lineup context.
 - Additional betting markets.
-- Supabase migration.
+- Migration away from Supabase (if needed after v1 stabilization).
 - Public custom prediction experience.
 

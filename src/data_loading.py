@@ -33,6 +33,11 @@ REQUIRED_COLUMNS = [
 
 OPTIONAL_COLUMNS = ["usage", "ts", "team_pace", "opp_pace", "opp_def_rating"]
 
+def _season_str_to_id(season_str: str) -> int:
+    """Convert '2023-24' to numeric season_id 22023 used by the NBA API."""
+    return 20000 + int(season_str.strip()[:4])
+
+
 GAME_LOGS_SQL = """
     WITH game_opponents AS (
         SELECT g1.game_id, g1.team_id,
@@ -114,7 +119,7 @@ def load_game_logs_from_db(
     try:
         seasons = seasons or os.getenv("DATA_SEASONS")
         if seasons:
-            season_list = [s.strip() for s in seasons.split(",")]
+            season_list = [_season_str_to_id(s) for s in seasons.split(",")]
             season_sql = """
                 WITH game_opponents AS (
                     SELECT g1.game_id, g1.team_id,

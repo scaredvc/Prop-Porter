@@ -66,9 +66,25 @@ _cursor = None
 
 
 def get_connection():
-    """Lazily create and cache a database connection."""
-    global _connection
-    if _connection is None or _connection.closed:
+    """Lazily create and cache a database connection, reconnecting if stale."""
+    global _connection, _cursor
+    need_new = _connection is None or _connection.closed
+    if not need_new:
+        try:
+            _connection.isolation_level  # basic liveness check
+            cur = _connection.cursor()
+            cur.execute("SELECT 1")
+            cur.close()
+        except Exception:
+            need_new = True
+    if need_new:
+        # Close old connection if it exists
+        if _connection is not None:
+            try:
+                _connection.close()
+            except Exception:
+                pass
+        _cursor = None
         _connection = psycopg2.connect(
             dbname=os.getenv("DB_NAME"),
             user=os.getenv("DB_USER"),
@@ -259,15 +275,18 @@ def load_players_data():
                     age_val,
                 )
                 get_cursor().execute(sql_command, values_to_insert)
+                get_connection().commit()
                 if should_fetch_meta:
                     rate_limit_sleep()
 
-        get_connection().commit()
         print("Done loading players")
 
     except Exception as e:
         print(f'Fatal error in load_players_data: {str(e)}')
-        get_connection().rollback()
+        try:
+            get_connection().rollback()
+        except Exception:
+            pass
         raise
 
 def load_teams_data():
@@ -334,67 +353,71 @@ def load_games_data():
                         for index, row in all_games_for_season.iterrows():
                             if row['TEAM_ID'] not in valid_teams_set:
                                 continue
-                    
-                        is_home, opponent_abbr = parse_matchup(row['MATCHUP'])
-                        opponent_team_id = abbr_to_id.get(opponent_abbr) if opponent_abbr else None
 
-                        game_data = {
-                            'season_id': row['SEASON_ID'],
-                            'team_id': row['TEAM_ID'],
-                            'team_abbreviation': row['TEAM_ABBREVIATION'],
-                            'game_id': row['GAME_ID'],
-                            'game_date': row['GAME_DATE'],
-                            'matchup': row['MATCHUP'],
-                            'is_home': is_home,
-                            'opponent_team_id': opponent_team_id,
-                            'win_loss': row['WL'],
-                            'minutes': row['MIN'],
-                            'points': row['PTS'],
-                            'fgm': row['FGM'],
-                            'fga': row['FGA'],
-                            'fg_pct': row['FG_PCT'],
-                            'fg3m': row['FG3M'],
-                            'fg3a': row['FG3A'],
-                            'fg3_pct': row['FG3_PCT'],
-                            'ftm': row['FTM'],
-                            'fta': row['FTA'],
-                            'ft_pct': row['FT_PCT'],
-                            'oreb': row['OREB'],
-                            'dreb': row['DREB'],
-                            'reb': row['REB'],
-                            'ast': row['AST'],
-                            'stl': row['STL'],
-                            'blk': row['BLK'],
-                            'tov': row['TOV'],
-                            'pf': row['PF'],
-                            'plus_minus': row['PLUS_MINUS']
-                        }
-                        
-                        sql_command = """
-                            INSERT INTO games (
-                                season_id, team_id, team_abbreviation, game_id, game_date,
-                                matchup, opponent_team_id, is_home,
-                                win_loss, minutes, points, fgm,
-                                fga, fg_pct, fg3m, fg3a, fg3_pct,
-                                ftm, fta, ft_pct, oreb, dreb,
-                                reb, ast, stl, blk, tov,
-                                pf, plus_minus
+                            is_home, opponent_abbr = parse_matchup(row['MATCHUP'])
+                            opponent_team_id = abbr_to_id.get(opponent_abbr) if opponent_abbr else None
 
-                            ) VALUES (
-                                %(season_id)s, %(team_id)s, %(team_abbreviation)s, %(game_id)s, %(game_date)s,
-                                %(matchup)s, %(opponent_team_id)s, %(is_home)s,
-                                %(win_loss)s, %(minutes)s, %(points)s, %(fgm)s,
-                                %(fga)s, %(fg_pct)s, %(fg3m)s, %(fg3a)s, %(fg3_pct)s,
-                                %(ftm)s, %(fta)s, %(ft_pct)s, %(oreb)s, %(dreb)s,
-                                %(reb)s, %(ast)s, %(stl)s, %(blk)s, %(tov)s,
-                                %(pf)s, %(plus_minus)s
-                            )
-                            ON CONFLICT (game_id, team_id) DO NOTHING;
-                        """
+                            game_data = {
+                                'season_id': row['SEASON_ID'],
+                                'team_id': row['TEAM_ID'],
+                                'team_abbreviation': row['TEAM_ABBREVIATION'],
+                                'game_id': row['GAME_ID'],
+                                'game_date': row['GAME_DATE'],
+                                'matchup': row['MATCHUP'],
+                                'is_home': is_home,
+                                'opponent_team_id': opponent_team_id,
+                                'win_loss': row['WL'],
+                                'minutes': row['MIN'],
+                                'points': row['PTS'],
+                                'fgm': row['FGM'],
+                                'fga': row['FGA'],
+                                'fg_pct': row['FG_PCT'],
+                                'fg3m': row['FG3M'],
+                                'fg3a': row['FG3A'],
+                                'fg3_pct': row['FG3_PCT'],
+                                'ftm': row['FTM'],
+                                'fta': row['FTA'],
+                                'ft_pct': row['FT_PCT'],
+                                'oreb': row['OREB'],
+                                'dreb': row['DREB'],
+                                'reb': row['REB'],
+                                'ast': row['AST'],
+                                'stl': row['STL'],
+                                'blk': row['BLK'],
+                                'tov': row['TOV'],
+                                'pf': row['PF'],
+                                'plus_minus': row['PLUS_MINUS']
+                            }
 
-                        get_cursor().execute(sql_command, game_data)
+                            sql_command = """
+                                INSERT INTO games (
+                                    season_id, team_id, team_abbreviation, game_id, game_date,
+                                    matchup, opponent_team_id, is_home,
+                                    win_loss, minutes, points, fgm,
+                                    fga, fg_pct, fg3m, fg3a, fg3_pct,
+                                    ftm, fta, ft_pct, oreb, dreb,
+                                    reb, ast, stl, blk, tov,
+                                    pf, plus_minus
+
+                                ) VALUES (
+                                    %(season_id)s, %(team_id)s, %(team_abbreviation)s, %(game_id)s, %(game_date)s,
+                                    %(matchup)s, %(opponent_team_id)s, %(is_home)s,
+                                    %(win_loss)s, %(minutes)s, %(points)s, %(fgm)s,
+                                    %(fga)s, %(fg_pct)s, %(fg3m)s, %(fg3a)s, %(fg3_pct)s,
+                                    %(ftm)s, %(fta)s, %(ft_pct)s, %(oreb)s, %(dreb)s,
+                                    %(reb)s, %(ast)s, %(stl)s, %(blk)s, %(tov)s,
+                                    %(pf)s, %(plus_minus)s
+                                )
+                                ON CONFLICT (game_id, team_id) DO NOTHING;
+                            """
+
+                            get_cursor().execute(sql_command, game_data)
+
+                        get_connection().commit()
+                        print(f'Done loading games for {season}')
                 except Exception as e:
                         print(f"Error loading games for {season}: {str(e)}")
+                        get_connection().rollback()
                         if isinstance(e, (Timeout, ConnectionError)) and COOL_OFF_ON_TIMEOUT > 0:
                                 try:
                                         print(f'Cooling off for {COOL_OFF_ON_TIMEOUT} seconds due to timeout while loading season {season}...')
@@ -403,9 +426,6 @@ def load_games_data():
                                         pass
                         # continue with next season
                         continue
-                        
-        get_connection().commit()
-        print(f'Done loading games for {season}')
 
     except Exception as e:
         print(f'Fatal error in load_games_data: {str(e)}')
@@ -551,8 +571,8 @@ def load_player_game_stats():
 
 if __name__ == "__main__":
     try:
-        load_players_data() 
         load_teams_data()
+        load_players_data()
         load_games_data()
         load_player_game_stats()
 

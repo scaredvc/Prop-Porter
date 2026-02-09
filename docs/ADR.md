@@ -13,20 +13,20 @@
 ## ADR-002: Postgres-first data path for v1
 
 **Status:** Accepted
-**Date:** 2026-02-06
-**Context:** Historical stats already live in AWS-hosted Postgres. A CSV-first pipeline would add unnecessary file I/O and synchronization overhead.
-**Decision:** Use Postgres as the primary data path for training extraction, feature computation inputs, and daily inference.
-**Consequences:** Pipeline scripts must connect to Postgres. CSV/Parquet exports are secondary artifacts for portability and debugging.
+**Date:** 2026-02-09
+**Context:** The AWS DB was decommissioned. A CSV-first pipeline would add unnecessary file I/O and synchronization overhead.
+**Decision:** Use Postgres as the primary data path for training extraction, feature computation inputs, and daily inference, with Supabase Postgres as the managed DB target.
+**Consequences:** Pipeline scripts must connect to Supabase Postgres. CSV/Parquet exports are secondary artifacts for portability and debugging.
 
 ---
 
-## ADR-003: AWS-first infrastructure for v1
+## ADR-003: Supabase Postgres data infrastructure for v1
 
 **Status:** Accepted
-**Date:** 2026-02-06
-**Context:** Current backend and database are hosted on AWS. Migrating to Supabase during the pivot adds risk and scope.
-**Decision:** Stay on AWS for v1 delivery. Supabase migration is explicitly deferred to post-v1 backlog.
-**Consequences:** No Supabase dependencies in v1. Infrastructure migration can be revisited after the pipeline is stable.
+**Date:** 2026-02-09
+**Context:** The prior AWS DB is no longer available. v1 still needs managed Postgres for historical storage, daily reads, and training extraction.
+**Decision:** Move the DB layer to Supabase during the pivot and keep the app runtime deploy target flexible (local/Docker) for v1.
+**Consequences:** DB connection setup and runbooks must target Supabase credentials/SSL. App hosting can be migrated independently after data layer stabilization.
 
 ---
 
@@ -77,3 +77,18 @@
 **Context:** LLM scoring may fail due to budget caps, parse errors, or timeouts. The pipeline must not fail entirely when LLM is unavailable.
 **Decision:** Row-level fallback chain: Ensemble -> ML + line -> ML-only -> no prediction (flagged).
 **Consequences:** Every prediction row carries a `prediction_mode` and optional `reason_code`. Coverage metrics track fallback usage per run.
+
+---
+
+## ADR-009: Data freshness policy for training set
+
+**Status:** Accepted
+**Date:** 2026-02-09
+**Context:** The ML model needs a defined training window of historical data. Too little data reduces accuracy; too much includes stale roster/playstyle patterns.
+**Decision:**
+- Default training window: 3 NBA seasons, controlled by the `API_SEASONS` env var.
+- Current default seasons: `2021-22, 2022-23, 2023-24`.
+- No explicit recency weighting in v1. Rolling feature windows (last 5/10 games) inherently emphasize recent performance.
+- Re-extract data before each model retraining cycle using `scripts/extract_game_logs.py`.
+- Extraction metadata (run_id, row count, date range) is tracked in `data_extraction_runs` table.
+**Consequences:** Adding a new season requires updating `API_SEASONS` and re-running ingestion + extraction. No automated schedule in v1 — retraining is manual.

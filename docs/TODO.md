@@ -9,15 +9,15 @@ This file breaks the project into small, actionable steps.
 - [x] Keep this repo and pivot in-place (no full restart).
 - [x] Scope daily inference to players scheduled for today's games.
 - [x] Record current infrastructure context:
-  - [x] Historical stats source is AWS-hosted SQL.
-  - [x] Existing backend is hosted on AWS.
-  - [x] Supabase migration is a valid option.
+  - [x] Historical stats previously lived in AWS-hosted SQL.
+  - [x] AWS DB was decommissioned for cost control.
+  - [x] Supabase-hosted Postgres is selected for v1.
 - [x] Choose primary storage path for v1:
   - [ ] CSV-first pipeline.
   - [x] Postgres-first pipeline. *(Locked decision — see `docs/ADR.md` ADR-002)*
 - [x] Decide near-term infra approach:
-  - [x] Stay on AWS for v1. *(Locked decision — see `docs/ADR.md` ADR-003)*
-  - [ ] Move DB/backend to Supabase during pivot. *(Deferred to post-v1)*
+  - [ ] Stay on AWS for v1.
+  - [x] Move DB to Supabase during pivot. *(Locked decision — see `docs/ADR.md` ADR-003)*
 - [x] Complete legacy code audit and tag modules: *(See `docs/LEGACY_AUDIT.md`)*
   - [x] Reuse ingestion/retry utilities.
   - [x] Reuse schema foundation.
@@ -54,17 +54,17 @@ This file breaks the project into small, actionable steps.
 
 ## Phase 2 — Historical Data Preparation
 
-- [ ] Export/ingest historical game logs from AWS SQL into `data/raw/game_logs.csv` (or equivalent table/view).
-- [ ] Add data freshness policy for training set:
-  - [ ] Define date window/seasons to include.
-  - [ ] Optionally apply recency weighting or filtering.
-- [ ] Create `src/data_loading.py`:
-  - [ ] Function to load `game_logs.csv` into a DataFrame.
-  - [ ] Ensure `game_date` is parsed as datetime.
-  - [ ] Ensure required columns exist and are correctly typed.
-- [ ] Add basic data validation checks:
-  - [ ] No duplicate `(player_id, game_id)` rows.
-  - [ ] No null `player_id` or `game_date`.
+- [x] Export/ingest historical game logs from Supabase Postgres into `data/raw/game_logs.csv` (or equivalent table/view).
+- [x] Add data freshness policy for training set:
+  - [x] Define date window/seasons to include. *(See `docs/ADR.md` ADR-009)*
+  - [x] Optionally apply recency weighting or filtering. *(No explicit weighting in v1; rolling features handle recency)*
+- [x] Create `src/data_loading.py`:
+  - [x] Function to load game logs from DB into a DataFrame.
+  - [x] Ensure `game_date` is parsed as datetime.
+  - [x] Ensure required columns exist and are correctly typed.
+- [x] Add basic data validation checks:
+  - [x] No duplicate `(player_id, game_id)` rows.
+  - [x] No null `player_id` or `game_date`.
 
 ---
 

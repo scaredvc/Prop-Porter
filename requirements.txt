@@ -22,5 +22,8 @@ nba-api>=1.4,<2
 # === Configuration ===
 python-dotenv>=1.0,<2
 
+# === Data Export ===
+pyarrow>=14.0,<19
+
 # === Testing ===
 pytest>=8.0,<9

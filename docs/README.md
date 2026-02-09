@@ -11,11 +11,11 @@ This project predicts NBA player points for upcoming games using a hybrid pipeli
 
 ## Current Project Context (Confirmed)
 
-- Historical player stats currently live in an AWS-hosted SQL database.
+- Historical player stats previously lived in an AWS-hosted SQL database.
 - Current historical data is considered noisy/outdated for direct use without stronger recency handling.
-- Existing backend is hosted on AWS.
-- Possible infrastructure migration path: AWS DB/backend to Supabase.
-- Storage for the pivot can be CSV-first or Postgres-first.
+- AWS DB was decommissioned for cost control.
+- v1 data layer target is Supabase-hosted Postgres.
+- Storage path for the pivot is Postgres-first (CSV exports optional artifacts).
 - Daily inference scope: run predictions for players scheduled in that day's games.
 
 ---
