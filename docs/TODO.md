@@ -100,17 +100,17 @@ This file breaks the project into small, actionable steps.
 
 ## Phase 4 — Grok: Sportsbook Line Fetcher
 
-- [ ] Create `grok_prompts/fetch_lines.txt` with JSON-only prompt template.
-- [ ] Create `.env` file for Grok API key.
-- [ ] Create `src/grok_client.py`:
-  - [ ] Function to read prompt template.
-  - [ ] Function to call Grok API with a date.
-  - [ ] Function to parse the JSON response.
-- [ ] Create `scripts/fetch_lines_for_date.py`:
-  - [ ] Accept date as argument.
-  - [ ] Call Grok client.
-  - [ ] Parse JSON into DataFrame.
-  - [ ] Save to `data/lines/{date}.csv`.
+- [x] Create `grok_prompts/fetch_lines.txt` with JSON-only prompt template.
+- [x] Create `.env` file for Grok API key.
+- [x] Create `src/grok_client.py`:
+  - [x] Function to read prompt template.
+  - [x] Function to call Grok API with a date.
+  - [x] Function to parse the JSON response.
+- [x] Create `scripts/fetch_lines_for_date.py`:
+  - [x] Accept date as argument.
+  - [x] Call Grok client.
+  - [x] Parse JSON into DataFrame.
+  - [x] Save to `data/lines/{date}.csv`.
 
 ---
 

@@ -4,7 +4,9 @@
       "Bash(dir:*)",
       "mcp__plugin_supabase_supabase__apply_migration",
       "mcp__plugin_supabase_supabase__list_tables",
-      "Bash(.venv/bin/python -m pytest tests/ -v -k \"not test_data_utils\")"
+      "Bash(.venv/bin/python -m pytest tests/ -v -k \"not test_data_utils\")",
+      "Bash(.venv/bin/python -m pytest tests/test_grok_client.py -v)",
+      "Bash(.venv/bin/python -m pytest:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
