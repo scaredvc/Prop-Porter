@@ -70,31 +70,31 @@ This file breaks the project into small, actionable steps.
 
 ## Phase 3 — Feature Engineering
 
-- [ ] Create `src/features.py`.
-- [ ] Implement helper functions:
-  - [ ] `rolling_mean_excl_current(group, col, window, min_periods)`
-  - [ ] `rolling_std_excl_current(group, col, window, min_periods)`
-- [ ] Implement main function: `build_player_features(df_games)`:
-  - [ ] Convert `game_date` to datetime.
-  - [ ] Sort by `player_id`, `game_date`.
-  - [ ] Group by `player_id`.
-  - [ ] Compute:
-    - [ ] `ppg_last_5`
-    - [ ] `ppg_last_10`
-    - [ ] `min_last_5`
-    - [ ] `usage_last_5` (if `usage` column present)
-    - [ ] `ts_last_5` (if `ts` column present)
-    - [ ] `shots_last_5` (if `fga` column present)
-    - [ ] `points_std_last_10`
-  - [ ] Compute rest metrics:
-    - [ ] `days_rest` (difference in `game_date` per player)
-    - [ ] Fill missing `days_rest` (e.g., 7).
-    - [ ] `b2b_flag` where `days_rest == 1`.
-  - [ ] Ensure context columns exist (`home_flag`, `team_pace`, `opp_pace`, `opp_def_rating`), fill with NaN if missing.
-- [ ] Script to:
-  - [ ] Load `data/raw/game_logs.csv`.
-  - [ ] Apply `build_player_features`.
-  - [ ] Save to `data/processed/features.csv`.
+- [x] Create `src/features.py`.
+- [x] Implement helper functions:
+  - [x] `rolling_mean_excl_current(group, col, window, min_periods)`
+  - [x] `rolling_std_excl_current(group, col, window, min_periods)`
+- [x] Implement main function: `build_player_features(df_games)`:
+  - [x] Convert `game_date` to datetime.
+  - [x] Sort by `player_id`, `game_date`.
+  - [x] Group by `player_id`.
+  - [x] Compute:
+    - [x] `ppg_last_5`
+    - [x] `ppg_last_10`
+    - [x] `min_last_5`
+    - [x] `usage_last_5` (if `usage` column present)
+    - [x] `ts_last_5` (if `ts` column present)
+    - [x] `shots_last_5` (if `fga` column present)
+    - [x] `points_std_last_10`
+  - [x] Compute rest metrics:
+    - [x] `days_rest` (difference in `game_date` per player)
+    - [x] Fill missing `days_rest` (e.g., 7).
+    - [x] `b2b_flag` where `days_rest == 1`.
+  - [x] Ensure context columns exist (`home_flag`, `team_pace`, `opp_pace`, `opp_def_rating`), fill with NaN if missing.
+- [x] Script to:
+  - [x] Load `data/raw/game_logs.csv`.
+  - [x] Apply `build_player_features`.
+  - [x] Save to `data/processed/features.csv`.
 
 ---
 
