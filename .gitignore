@@ -1,5 +1,5 @@
 Byte-compiled / optimized / C extensions
-pycache/
+__pycache__/
 *.py[cod]
 *$py.class
 
@@ -62,8 +62,32 @@ IDE / Editor specific
 .vscode/
 *.swp
 
-models/
+# Model artifacts (track directory structure via .gitkeep)
+models/*
+!models/.gitkeep
 *.pkl
+*.joblib
+
+# Data files (track directory structure via .gitkeep)
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/sample_game_logs.csv
+data/processed/*
+!data/processed/.gitkeep
+data/lines/*
+!data/lines/.gitkeep
+data/llm/*
+!data/llm/.gitkeep
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+*.ipynb
+
+# Legacy/test virtual environments
+test_env/
+
+# Accidental files
+nul
 
 # Next.js
 .next/
@@ -72,8 +96,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Documentation (personal notes)
-docs/
+# Claude workspace metadata
+.claude/
+.mcp.json
 
 # Environment variables
 .env.local

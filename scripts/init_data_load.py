@@ -61,16 +61,47 @@ def _parse_env_seasons(env_value: Optional[str]) -> List[str]:
 
 season_to_load: List[str] = _parse_env_seasons(os.getenv('API_SEASONS'))
 
-connection = psycopg2.connect(
-    dbname = os.getenv("DB_NAME"),
-    user = os.getenv("DB_USER"),
-    password = os.getenv("DB_PASSWORD"),
-    host = os.getenv("DB_HOST"),
-    port = os.getenv("DB_PORT"),
-)
+_connection = None
+_cursor = None
 
-cur = connection.cursor()
-print("connected to database")
+
+def get_connection():
+    """Lazily create and cache a database connection, reconnecting if stale."""
+    global _connection, _cursor
+    need_new = _connection is None or _connection.closed
+    if not need_new:
+        try:
+            _connection.isolation_level  # basic liveness check
+            cur = _connection.cursor()
+            cur.execute("SELECT 1")
+            cur.close()
+        except Exception:
+            need_new = True
+    if need_new:
+        # Close old connection if it exists
+        if _connection is not None:
+            try:
+                _connection.close()
+            except Exception:
+                pass
+        _cursor = None
+        _connection = psycopg2.connect(
+            dbname=os.getenv("DB_NAME"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD"),
+            host=os.getenv("DB_HOST"),
+            port=os.getenv("DB_PORT"),
+        )
+        print("connected to database")
+    return _connection
+
+
+def get_cursor():
+    """Lazily create and cache a cursor from the connection."""
+    global _cursor
+    if _cursor is None or _cursor.closed:
+        _cursor = get_connection().cursor()
+    return _cursor
 
 def rate_limit_sleep():
     """Sleep for a random duration to avoid rate limiting"""
@@ -111,8 +142,8 @@ def load_players_data():
 
         # Identify which players actually need enrichment (position/height/weight/age missing)
         refresh_all_meta = _get_env_bool("API_REFRESH_PLAYER_META", False)
-        cur.execute("SELECT id, position, height_inches, weight_lbs, age FROM players")
-        rows = cur.fetchall()
+        get_cursor().execute("SELECT id, position, height_inches, weight_lbs, age FROM players")
+        rows = get_cursor().fetchall()
         ids_needing_meta = set()
         existing_meta = {r[0]: (r[1], r[2], r[3], r[4]) for r in rows}
         for pid, (pos, h, w, age) in existing_meta.items():
@@ -123,14 +154,14 @@ def load_players_data():
         # Detect DB VARCHAR limit for players.position so we can truncate safely
         position_limit: Optional[int] = None
         try:
-            cur.execute(
+            get_cursor().execute(
                 """
                 SELECT character_maximum_length
                 FROM information_schema.columns
                 WHERE table_schema = 'public' AND table_name = 'players' AND column_name = 'position'
                 """
             )
-            row = cur.fetchone()
+            row = get_cursor().fetchone()
             if row and row[0]:
                 position_limit = int(row[0])
         except Exception:
@@ -243,16 +274,19 @@ def load_players_data():
                     weight_lbs_val,
                     age_val,
                 )
-                cur.execute(sql_command, values_to_insert)
+                get_cursor().execute(sql_command, values_to_insert)
+                get_connection().commit()
                 if should_fetch_meta:
                     rate_limit_sleep()
-                
-        connection.commit()
+
         print("Done loading players")
-        
+
     except Exception as e:
         print(f'Fatal error in load_players_data: {str(e)}')
-        connection.rollback()
+        try:
+            get_connection().rollback()
+        except Exception:
+            pass
         raise
 
 def load_teams_data():
@@ -274,14 +308,14 @@ def load_teams_data():
                     ON CONFLICT (id) DO NOTHING;
                 """ 
                 values_to_insert = (team['id'], team['full_name'], team['abbreviation'], team['nickname'], team['city'], team['state'], team['year_founded'])
-                cur.execute(sql_command, values_to_insert)
-                
-        connection.commit()
+                get_cursor().execute(sql_command, values_to_insert)
+
+        get_connection().commit()
         print('Done loading teams')
-        
+
     except Exception as e:
         print(f'Fatal error in load_teams_data: {str(e)}')
-        connection.rollback()
+        get_connection().rollback()
         raise
 
 def load_games_data():
@@ -319,67 +353,71 @@ def load_games_data():
                         for index, row in all_games_for_season.iterrows():
                             if row['TEAM_ID'] not in valid_teams_set:
                                 continue
-                    
-                        is_home, opponent_abbr = parse_matchup(row['MATCHUP'])
-                        opponent_team_id = abbr_to_id.get(opponent_abbr) if opponent_abbr else None
 
-                        game_data = {
-                            'season_id': row['SEASON_ID'],
-                            'team_id': row['TEAM_ID'],
-                            'team_abbreviation': row['TEAM_ABBREVIATION'],
-                            'game_id': row['GAME_ID'],
-                            'game_date': row['GAME_DATE'],
-                            'matchup': row['MATCHUP'],
-                            'is_home': is_home,
-                            'opponent_team_id': opponent_team_id,
-                            'win_loss': row['WL'],
-                            'minutes': row['MIN'],
-                            'points': row['PTS'],
-                            'fgm': row['FGM'],
-                            'fga': row['FGA'],
-                            'fg_pct': row['FG_PCT'],
-                            'fg3m': row['FG3M'],
-                            'fg3a': row['FG3A'],
-                            'fg3_pct': row['FG3_PCT'],
-                            'ftm': row['FTM'],
-                            'fta': row['FTA'],
-                            'ft_pct': row['FT_PCT'],
-                            'oreb': row['OREB'],
-                            'dreb': row['DREB'],
-                            'reb': row['REB'],
-                            'ast': row['AST'],
-                            'stl': row['STL'],
-                            'blk': row['BLK'],
-                            'tov': row['TOV'],
-                            'pf': row['PF'],
-                            'plus_minus': row['PLUS_MINUS']
-                        }
-                        
-                        sql_command = """
-                            INSERT INTO games (
-                                season_id, team_id, team_abbreviation, game_id, game_date,
-                                matchup, opponent_team_id, is_home,
-                                win_loss, minutes, points, fgm,
-                                fga, fg_pct, fg3m, fg3a, fg3_pct,
-                                ftm, fta, ft_pct, oreb, dreb,
-                                reb, ast, stl, blk, tov,
-                                pf, plus_minus
+                            is_home, opponent_abbr = parse_matchup(row['MATCHUP'])
+                            opponent_team_id = abbr_to_id.get(opponent_abbr) if opponent_abbr else None
 
-                            ) VALUES (
-                                %(season_id)s, %(team_id)s, %(team_abbreviation)s, %(game_id)s, %(game_date)s,
-                                %(matchup)s, %(opponent_team_id)s, %(is_home)s,
-                                %(win_loss)s, %(minutes)s, %(points)s, %(fgm)s,
-                                %(fga)s, %(fg_pct)s, %(fg3m)s, %(fg3a)s, %(fg3_pct)s,
-                                %(ftm)s, %(fta)s, %(ft_pct)s, %(oreb)s, %(dreb)s,
-                                %(reb)s, %(ast)s, %(stl)s, %(blk)s, %(tov)s,
-                                %(pf)s, %(plus_minus)s
-                            )
-                            ON CONFLICT (game_id, team_id) DO NOTHING;
-                        """
+                            game_data = {
+                                'season_id': row['SEASON_ID'],
+                                'team_id': row['TEAM_ID'],
+                                'team_abbreviation': row['TEAM_ABBREVIATION'],
+                                'game_id': row['GAME_ID'],
+                                'game_date': row['GAME_DATE'],
+                                'matchup': row['MATCHUP'],
+                                'is_home': is_home,
+                                'opponent_team_id': opponent_team_id,
+                                'win_loss': row['WL'],
+                                'minutes': row['MIN'],
+                                'points': row['PTS'],
+                                'fgm': row['FGM'],
+                                'fga': row['FGA'],
+                                'fg_pct': row['FG_PCT'],
+                                'fg3m': row['FG3M'],
+                                'fg3a': row['FG3A'],
+                                'fg3_pct': row['FG3_PCT'],
+                                'ftm': row['FTM'],
+                                'fta': row['FTA'],
+                                'ft_pct': row['FT_PCT'],
+                                'oreb': row['OREB'],
+                                'dreb': row['DREB'],
+                                'reb': row['REB'],
+                                'ast': row['AST'],
+                                'stl': row['STL'],
+                                'blk': row['BLK'],
+                                'tov': row['TOV'],
+                                'pf': row['PF'],
+                                'plus_minus': row['PLUS_MINUS']
+                            }
 
-                        cur.execute(sql_command, game_data)
+                            sql_command = """
+                                INSERT INTO games (
+                                    season_id, team_id, team_abbreviation, game_id, game_date,
+                                    matchup, opponent_team_id, is_home,
+                                    win_loss, minutes, points, fgm,
+                                    fga, fg_pct, fg3m, fg3a, fg3_pct,
+                                    ftm, fta, ft_pct, oreb, dreb,
+                                    reb, ast, stl, blk, tov,
+                                    pf, plus_minus
+
+                                ) VALUES (
+                                    %(season_id)s, %(team_id)s, %(team_abbreviation)s, %(game_id)s, %(game_date)s,
+                                    %(matchup)s, %(opponent_team_id)s, %(is_home)s,
+                                    %(win_loss)s, %(minutes)s, %(points)s, %(fgm)s,
+                                    %(fga)s, %(fg_pct)s, %(fg3m)s, %(fg3a)s, %(fg3_pct)s,
+                                    %(ftm)s, %(fta)s, %(ft_pct)s, %(oreb)s, %(dreb)s,
+                                    %(reb)s, %(ast)s, %(stl)s, %(blk)s, %(tov)s,
+                                    %(pf)s, %(plus_minus)s
+                                )
+                                ON CONFLICT (game_id, team_id) DO NOTHING;
+                            """
+
+                            get_cursor().execute(sql_command, game_data)
+
+                        get_connection().commit()
+                        print(f'Done loading games for {season}')
                 except Exception as e:
                         print(f"Error loading games for {season}: {str(e)}")
+                        get_connection().rollback()
                         if isinstance(e, (Timeout, ConnectionError)) and COOL_OFF_ON_TIMEOUT > 0:
                                 try:
                                         print(f'Cooling off for {COOL_OFF_ON_TIMEOUT} seconds due to timeout while loading season {season}...')
@@ -388,13 +426,10 @@ def load_games_data():
                                         pass
                         # continue with next season
                         continue
-                        
-        connection.commit()
-        print(f'Done loading games for {season}')
-        
+
     except Exception as e:
         print(f'Fatal error in load_games_data: {str(e)}')
-        connection.rollback()
+        get_connection().rollback()
         raise
 
 
@@ -411,13 +446,13 @@ def convert_time_to_minutes(time_str):
 
 def load_player_game_stats():
     try:
-        cur.execute("SELECT id FROM players")
-        active_player_ids = {row[0] for row in cur.fetchall()}
+        get_cursor().execute("SELECT id FROM players")
+        active_player_ids = {row[0] for row in get_cursor().fetchall()}
         print(f"Active player IDs: {len(active_player_ids)} players found")
 
         # Get already processed games
-        cur.execute("SELECT DISTINCT game_id FROM player_game_stats")
-        processed_games = {row[0] for row in cur.fetchall()}
+        get_cursor().execute("SELECT DISTINCT game_id FROM player_game_stats")
+        processed_games = {row[0] for row in get_cursor().fetchall()}
         print(f"Found {len(processed_games)} already processed games")
 
         def _season_str_to_season_id(season_str: str) -> int:
@@ -435,8 +470,8 @@ def load_player_game_stats():
             WHERE season_id IN ({season_ids_clause})
         """
 
-        cur.execute(from_games_table)
-        all_games = cur.fetchall()
+        get_cursor().execute(from_games_table)
+        all_games = get_cursor().fetchall()
         total_games = len(all_games)
         print(f"Processing {total_games} games")
 
@@ -508,10 +543,10 @@ def load_player_game_stats():
                                 ON CONFLICT (player_id, game_id) DO NOTHING;
                             """
                             
-                            cur.execute(sql_command, game_data)
-                            
+                            get_cursor().execute(sql_command, game_data)
+
                     # Commit after each game to save progress
-                    connection.commit()
+                    get_connection().commit()
                     print(f'Successfully processed game {game_id}')
                     
                 except Exception as e:
@@ -530,24 +565,24 @@ def load_player_game_stats():
         
     except Exception as e:
         print(f'Fatal error in load_player_game_stats: {str(e)}')
-        connection.rollback()
+        get_connection().rollback()
         raise
 
 
 if __name__ == "__main__":
     try:
-        load_players_data() 
         load_teams_data()
+        load_players_data()
         load_games_data()
         load_player_game_stats()
 
     except Exception as e:
         print(f'Fatal error in main execution: {str(e)}')
-        connection.rollback()
+        get_connection().rollback()
 
     finally:
-        if cur is not None:
-            cur.close()
-        if connection is not None:
-            connection.close()
+        if _cursor is not None:
+            _cursor.close()
+        if _connection is not None:
+            _connection.close()
         print("Connection to database closed")
