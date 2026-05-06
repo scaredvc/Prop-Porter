@@ -4,7 +4,7 @@ Prop-Porter is an NBA player points prediction project exploring how far recent 
 
 ## Demo
 
-![Prediction vs Actual](demo/prediction_vs_actual.svg)
+![Grouped bar chart comparing predicted and actual points by opponent](demo/prediction_vs_actual.svg)
 
 ## What It Does
 

@@ -1,63 +1,93 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" width="900" height="520" role="img" aria-labelledby="title desc">
-  <title id="title">Prop-Porter prediction vs actual points</title>
-  <desc id="desc">Line chart comparing actual and predicted NBA player points on the held-out set.</desc>
-  <rect width="900" height="520" fill="#fbfaf5" />
-  <text x="60" y="50" font-family="Arial, sans-serif" font-size="26" font-weight="700" fill="#1f2937">Prediction vs Actual Points</text>
-  <text x="60" y="78" font-family="Arial, sans-serif" font-size="16" fill="#4b5563">Held-out games from the Prop-Porter baseline experiment</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540" width="900" height="540" role="img" aria-labelledby="title desc">
+  <title id="title">Predicted vs actual player points by opponent</title>
+  <desc id="desc">Grouped bar chart comparing predicted and actual NBA player points across five held-out games and opponents.</desc>
+  <rect width="900" height="540" fill="#ffffff" />
 
-  <line x1="80" y1="420" x2="840" y2="420" stroke="#374151" stroke-width="2" />
-  <line x1="80" y1="110" x2="80" y2="420" stroke="#374151" stroke-width="2" />
+  <style>
+    .title { font: 700 28px Arial, sans-serif; fill: #111827; }
+    .subtitle { font: 400 15px Arial, sans-serif; fill: #4b5563; }
+    .axis { font: 12px Arial, sans-serif; fill: #374151; }
+    .label { font: 700 13px Arial, sans-serif; fill: #111827; }
+    .small { font: 12px Arial, sans-serif; fill: #4b5563; }
+    .value { font: 700 12px Arial, sans-serif; fill: #111827; }
+  </style>
 
-  <g font-family="Arial, sans-serif" font-size="12" fill="#4b5563">
-    <text x="52" y="424">0</text>
-    <text x="44" y="363">5</text>
-    <text x="38" y="301">10</text>
-    <text x="38" y="239">15</text>
-    <text x="38" y="177">20</text>
-    <text x="38" y="115">25+</text>
+  <text x="60" y="48" class="title">Predicted vs Actual Player Points</text>
+  <text x="60" y="76" class="subtitle">Comparison of model predictions against real game outcomes across multiple opponents.</text>
+
+  <g transform="translate(672 42)">
+    <rect x="0" y="0" width="16" height="16" fill="#d97706" rx="2" />
+    <text x="26" y="13" class="label">Actual</text>
+    <rect x="92" y="0" width="16" height="16" fill="#2563eb" rx="2" />
+    <text x="118" y="13" class="label">Predicted</text>
   </g>
+
+  <line x1="86" y1="430" x2="830" y2="430" stroke="#111827" stroke-width="2" />
+  <line x1="86" y1="120" x2="86" y2="430" stroke="#111827" stroke-width="2" />
 
   <g stroke="#e5e7eb" stroke-width="1">
-    <line x1="80" y1="358" x2="840" y2="358" />
-    <line x1="80" y1="296" x2="840" y2="296" />
-    <line x1="80" y1="234" x2="840" y2="234" />
-    <line x1="80" y1="172" x2="840" y2="172" />
-    <line x1="80" y1="110" x2="840" y2="110" />
+    <line x1="86" y1="430" x2="830" y2="430" />
+    <line x1="86" y1="352.5" x2="830" y2="352.5" />
+    <line x1="86" y1="275" x2="830" y2="275" />
+    <line x1="86" y1="197.5" x2="830" y2="197.5" />
+    <line x1="86" y1="120" x2="830" y2="120" />
   </g>
 
-  <polyline fill="none" stroke="#d97706" stroke-width="4" points="140,172 300,110 460,98 620,184 780,160" />
-  <polyline fill="none" stroke="#2563eb" stroke-width="4" stroke-dasharray="10 8" points="140,137 300,245 460,151 620,108 780,98" />
-
-  <g fill="#d97706">
-    <circle cx="140" cy="172" r="5" />
-    <circle cx="300" cy="110" r="5" />
-    <circle cx="460" cy="98" r="5" />
-    <circle cx="620" cy="184" r="5" />
-    <circle cx="780" cy="160" r="5" />
+  <g class="axis" text-anchor="end">
+    <text x="72" y="434">0</text>
+    <text x="72" y="356.5">9</text>
+    <text x="72" y="279">18</text>
+    <text x="72" y="201.5">27</text>
+    <text x="72" y="124">36</text>
   </g>
 
-  <g fill="#2563eb">
-    <circle cx="140" cy="137" r="5" />
-    <circle cx="300" cy="245" r="5" />
-    <circle cx="460" cy="151" r="5" />
-    <circle cx="620" cy="108" r="5" />
-    <circle cx="780" cy="98" r="5" />
+  <text x="26" y="282" class="axis" transform="rotate(-90 26 282)">Points</text>
+
+  <!-- Scale: chart height 310px, max 36 points. y = 430 - points * 8.6111. -->
+  <g>
+    <rect x="130" y="257.8" width="32" height="172.2" fill="#d97706" rx="3" />
+    <rect x="168" y="241.4" width="32" height="188.6" fill="#2563eb" rx="3" />
+    <text x="146" y="249.8" class="value" text-anchor="middle">20</text>
+    <text x="184" y="233.4" class="value" text-anchor="middle">22</text>
+    <text x="165" y="462" class="label" text-anchor="middle">SAS</text>
+    <text x="165" y="482" class="small" text-anchor="middle">Jokic, home</text>
   </g>
 
-  <g font-family="Arial, sans-serif" font-size="12" fill="#111827">
-    <text x="120" y="447">Jokic</text>
-    <text x="270" y="447">Curry</text>
-    <text x="425" y="447">LeBron</text>
-    <text x="600" y="447">Jokic</text>
-    <text x="750" y="447">Curry</text>
+  <g>
+    <rect x="270" y="145.8" width="32" height="284.2" fill="#d97706" rx="3" />
+    <rect x="308" y="238.4" width="32" height="191.6" fill="#2563eb" rx="3" />
+    <text x="286" y="137.8" class="value" text-anchor="middle">33</text>
+    <text x="324" y="230.4" class="value" text-anchor="middle">22</text>
+    <text x="305" y="462" class="label" text-anchor="middle">UTA</text>
+    <text x="305" y="482" class="small" text-anchor="middle">Curry, home</text>
   </g>
 
-  <g font-family="Arial, sans-serif" font-size="14" fill="#374151">
-    <text x="660" y="55">Actual</text>
-    <line x1="610" y1="50" x2="648" y2="50" stroke="#d97706" stroke-width="4" />
-    <text x="660" y="85">Predicted</text>
-    <line x1="610" y1="80" x2="648" y2="80" stroke="#2563eb" stroke-width="4" stroke-dasharray="10 8" />
+  <g>
+    <rect x="410" y="137.2" width="32" height="292.8" fill="#d97706" rx="3" />
+    <rect x="448" y="174.5" width="32" height="255.5" fill="#2563eb" rx="3" />
+    <text x="426" y="129.2" class="value" text-anchor="middle">34</text>
+    <text x="464" y="166.5" class="value" text-anchor="middle">30</text>
+    <text x="445" y="462" class="label" text-anchor="middle">SAC</text>
+    <text x="445" y="482" class="small" text-anchor="middle">LeBron, away</text>
   </g>
 
-  <text x="60" y="490" font-family="Arial, sans-serif" font-size="15" fill="#4b5563">MAE: 5.96 | R²: -0.34</text>
+  <g>
+    <rect x="550" y="197.5" width="32" height="232.5" fill="#d97706" rx="3" />
+    <rect x="588" y="172.8" width="32" height="257.2" fill="#2563eb" rx="3" />
+    <text x="566" y="189.5" class="value" text-anchor="middle">27</text>
+    <text x="604" y="164.8" class="value" text-anchor="middle">30</text>
+    <text x="585" y="462" class="label" text-anchor="middle">LAC</text>
+    <text x="585" y="482" class="small" text-anchor="middle">Jokic, away</text>
+  </g>
+
+  <g>
+    <rect x="690" y="249.2" width="32" height="180.8" fill="#d97706" rx="3" />
+    <rect x="728" y="164.8" width="32" height="265.2" fill="#2563eb" rx="3" />
+    <text x="706" y="241.2" class="value" text-anchor="middle">21</text>
+    <text x="744" y="156.8" class="value" text-anchor="middle">31</text>
+    <text x="725" y="462" class="label" text-anchor="middle">PHX</text>
+    <text x="725" y="482" class="small" text-anchor="middle">Curry, away</text>
+  </g>
+
+  <text x="86" y="515" class="small">Baseline RandomForest time split | MAE: 5.92 points | R2: -0.42 | Data: data/raw/sample_game_logs.csv</text>
 </svg>
