@@ -1,6 +1,6 @@
 # Prop-Porter
 
-Prop-Porter is an NBA player points prediction project that explores whether recent box-score history can be used to predict future scoring output.
+Prop-Porter is an NBA player points prediction project exploring how far recent box-score history can go in predicting future scoring output.
 
 ## Demo
 
@@ -41,6 +41,10 @@ python predict_player.py --player "Stephen Curry" --source auto
 - Recent field goal attempts
 - Home or away
 - Rest days
+
+## Key Takeaway
+
+Historical box-score features can capture short-term trends, but they are not enough by themselves for reliable sports prediction. A stronger system would need context like injuries, lineup changes, player role, usage, and team situation.
 
 ## Limitations
 
