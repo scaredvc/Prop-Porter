@@ -71,6 +71,7 @@ models/*
 # Data files (track directory structure via .gitkeep)
 data/raw/*
 !data/raw/.gitkeep
+!data/raw/sample_game_logs.csv
 data/processed/*
 !data/processed/.gitkeep
 data/lines/*

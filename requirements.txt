@@ -1,29 +1,9 @@
-# Prop-Porter — Python Dependencies
-# Install: pip install -r requirements.txt
-
-# === Core Data & ML ===
+# Prop-Porter experiment dependencies
 pandas>=2.1,<3
 numpy>=1.26,<2
 scikit-learn>=1.4,<2
+matplotlib>=3.8,<4
 joblib>=1.3,<2
-
-# === API & Web Framework ===
-flask>=3.0,<4
-Flask-Cors>=4.0,<5
-gunicorn>=21.2,<23
-requests>=2.31,<3
-
-# === Database ===
 psycopg2-binary>=2.9,<3
-
-# === NBA Data Source ===
-nba-api>=1.4,<2
-
-# === Configuration ===
 python-dotenv>=1.0,<2
-
-# === Data Export ===
-pyarrow>=14.0,<19
-
-# === Testing ===
 pytest>=8.0,<9

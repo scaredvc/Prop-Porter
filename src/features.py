@@ -1,119 +1,195 @@
-"""Feature engineering for player game logs.
+"""Feature engineering for NBA player points prediction."""
 
-Builds leakage-safe rolling statistics, rest metrics, and context
-features from validated game-log DataFrames.  Every rolling window
-uses ``.shift(1)`` so the current game's stats are never included
-in the feature value for that game.
-"""
+from __future__ import annotations
 
 import pandas as pd
 
-# ---------------------------------------------------------------------------
-# Rolling helpers (private)
-# ---------------------------------------------------------------------------
 
-def _rolling_mean_series(s: pd.Series, window: int, min_periods: int = 1) -> pd.Series:
-    """Rolling mean shifted by 1 to exclude the current row."""
-    return s.rolling(window=window, min_periods=min_periods).mean().shift(1)
-
-
-def _rolling_std_series(s: pd.Series, window: int, min_periods: int = 1) -> pd.Series:
-    """Rolling std shifted by 1 to exclude the current row."""
-    return s.rolling(window=window, min_periods=min_periods).std().shift(1)
-
-
-# ---------------------------------------------------------------------------
-# Rolling helpers (public wrappers)
-# ---------------------------------------------------------------------------
-
-def rolling_mean_excl_current(
-    group: pd.DataFrame, col: str, window: int, min_periods: int = 1
-) -> pd.Series:
-    """Rolling mean of *col* within *group*, excluding the current game."""
-    return _rolling_mean_series(group[col], window, min_periods)
-
-
-def rolling_std_excl_current(
-    group: pd.DataFrame, col: str, window: int, min_periods: int = 1
-) -> pd.Series:
-    """Rolling std of *col* within *group*, excluding the current game."""
-    return _rolling_std_series(group[col], window, min_periods)
-
-
-# ---------------------------------------------------------------------------
-# Data-driven feature definitions
-# ---------------------------------------------------------------------------
-
-# (output_col, source_col, window, optional?)
-ROLLING_FEATURES = [
-    ("ppg_last_5",   "points",  5,  False),
-    ("ppg_last_10",  "points",  10, False),
-    ("min_last_5",   "minutes", 5,  False),
-    ("shots_last_5", "fga",     5,  False),
-    ("usage_last_5", "usage",   5,  True),
-    ("ts_last_5",    "ts",      5,  True),
+FEATURE_COLUMNS = [
+    "player_points_last_5",
+    "player_points_last_10",
+    "player_points_ewm_span_5",
+    "player_points_ewm_span_10",
+    "ppm_last_5",
+    "ppm_last_10",
+    "ppm_ewm_span_5",
+    "ppm_ewm_span_10",
+    "days_rest",
+    "opponent_avg_points_allowed_last_10",
+    "opponent_possessions_last_10",
+    "opponent_def_rating_last_10",
+    "is_home",
 ]
 
-STD_FEATURES = [
-    ("points_std_last_10", "points", 10, False),
-]
-
-CONTEXT_COLUMNS = ["home_flag", "team_pace", "opp_pace", "opp_def_rating"]
+TARGET_COLUMN = "points"
 
 
-# ---------------------------------------------------------------------------
-# Main entry point
-# ---------------------------------------------------------------------------
-
-def build_player_features(df_games: pd.DataFrame, min_periods: int = 1) -> pd.DataFrame:
-    """Build player-level features from game logs.
-
-    Parameters
-    ----------
-    df_games : DataFrame
-        Validated game-log DataFrame (output of ``validate_game_logs``).
-    min_periods : int, optional
-        Minimum observations in a rolling window to produce a value
-        (default 1).
-
-    Returns
-    -------
-    DataFrame
-        A copy of the input with new feature columns appended.
-    """
-    df = df_games.copy()
-
-    # Ensure game_date is datetime and sort
-    df["game_date"] = pd.to_datetime(df["game_date"])
-    df = df.sort_values(by=["player_id", "game_date"]).reset_index(drop=True)
-
-    # --- Rolling mean features ---
-    for out_col, src_col, window, optional in ROLLING_FEATURES:
-        if optional and src_col not in df.columns:
-            continue
-        df[out_col] = df.groupby("player_id")[src_col].transform(
-            lambda s: _rolling_mean_series(s, window, min_periods)
-        )
-
-    # --- Rolling std features ---
-    for out_col, src_col, window, optional in STD_FEATURES:
-        if optional and src_col not in df.columns:
-            continue
-        df[out_col] = df.groupby("player_id")[src_col].transform(
-            lambda s: _rolling_std_series(s, window, min_periods)
-        )
-
-    # --- Rest metrics ---
-    df["prev_game_date"] = df.groupby("player_id")["game_date"].shift(1)
-    df["days_rest"] = (
-        (df["game_date"] - df["prev_game_date"]).dt.days.fillna(7).clip(lower=0, upper=10)
+def _possessions_proxy(
+    fga: pd.Series, oreb: pd.Series, tov: pd.Series, fta: pd.Series
+) -> pd.Series:
+    return (
+        fga.astype(float)
+        - oreb.astype(float)
+        + tov.astype(float)
+        + 0.44 * fta.astype(float)
     )
-    df["b2b_flag"] = (df["days_rest"] == 1).astype(int)
-    df.drop(columns=["prev_game_date"], inplace=True)
 
-    # --- Context columns (ensure they exist) ---
-    for col in CONTEXT_COLUMNS:
-        if col not in df.columns:
-            df[col] = pd.NA
 
-    return df
+def build_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Create a leakage-safe feature set from historical game logs."""
+    frame = df.copy()
+    frame["game_date"] = pd.to_datetime(frame["game_date"])
+    frame = frame.sort_values(["player_id", "game_date"]).reset_index(drop=True)
+
+    grouped = frame.groupby("player_id", group_keys=False)
+
+    frame["player_points_last_5"] = grouped["points"].transform(
+        lambda s: s.rolling(5, min_periods=1).mean().shift(1)
+    )
+    frame["player_points_last_10"] = grouped["points"].transform(
+        lambda s: s.rolling(10, min_periods=1).mean().shift(1)
+    )
+    frame["player_points_ewm_span_5"] = grouped["points"].transform(
+        lambda s: s.ewm(span=5, adjust=False).mean().shift(1)
+    )
+    frame["player_points_ewm_span_10"] = grouped["points"].transform(
+        lambda s: s.ewm(span=10, adjust=False).mean().shift(1)
+    )
+
+    def _ppm_series(group: pd.DataFrame) -> pd.Series:
+        values = group["points"].astype(float) / group["minutes"].replace({0: pd.NA}).astype(
+            "float64"
+        )
+        values = values.replace([float("inf"), float("-inf")], pd.NA)
+        return values
+
+    frame["ppm_last_5"] = grouped.apply(
+        lambda g: _ppm_series(g).rolling(5, min_periods=1).mean().shift(1)
+    ).reset_index(level=0, drop=True)
+    frame["ppm_last_10"] = grouped.apply(
+        lambda g: _ppm_series(g).rolling(10, min_periods=1).mean().shift(1)
+    ).reset_index(level=0, drop=True)
+    frame["ppm_ewm_span_5"] = grouped.apply(
+        lambda g: _ppm_series(g).ewm(span=5, adjust=False).mean().shift(1)
+    ).reset_index(level=0, drop=True)
+    frame["ppm_ewm_span_10"] = grouped.apply(
+        lambda g: _ppm_series(g).ewm(span=10, adjust=False).mean().shift(1)
+    ).reset_index(level=0, drop=True)
+
+    previous_game_date = grouped["game_date"].shift(1)
+    frame["days_rest"] = (
+        (frame["game_date"] - previous_game_date).dt.days.fillna(7).clip(0, 10)
+    )
+    frame["is_home"] = frame["home_flag"].astype(int)
+
+    team_context_columns = [
+        "points_allowed",
+        "team_fga",
+        "team_oreb",
+        "team_tov",
+        "team_fta",
+        "opponent_fga",
+        "opponent_oreb",
+        "opponent_tov",
+        "opponent_fta",
+    ]
+    has_team_context = all(
+        column in frame.columns and frame[column].notna().any() for column in team_context_columns
+    )
+
+    if has_team_context:
+        team_level = (
+            frame[
+                [
+                    "team_id",
+                    "game_id",
+                    "game_date",
+                    "points_allowed",
+                    "team_fga",
+                    "team_oreb",
+                    "team_tov",
+                    "team_fta",
+                ]
+            ]
+            .drop_duplicates(subset=["team_id", "game_id"])
+            .sort_values(["team_id", "game_date"])
+            .copy()
+        )
+        team_level["team_possessions"] = _possessions_proxy(
+            team_level["team_fga"],
+            team_level["team_oreb"],
+            team_level["team_tov"],
+            team_level["team_fta"],
+        )
+        team_level["team_points_allowed_rm10"] = team_level.groupby("team_id")[
+            "points_allowed"
+        ].transform(lambda s: s.rolling(10, min_periods=1).mean().shift(1))
+        team_level["team_possessions_rm10"] = team_level.groupby("team_id")[
+            "team_possessions"
+        ].transform(lambda s: s.rolling(10, min_periods=1).mean().shift(1))
+
+        opp_features = team_level[
+            [
+                "team_id",
+                "game_id",
+                "team_points_allowed_rm10",
+                "team_possessions_rm10",
+            ]
+        ].rename(
+            columns={
+                "team_id": "opponent_team_id",
+                "team_points_allowed_rm10": "opponent_avg_points_allowed_last_10",
+                "team_possessions_rm10": "opponent_possessions_last_10",
+            }
+        )
+
+        frame = frame.merge(opp_features, on=["opponent_team_id", "game_id"], how="left")
+
+        per_opponent_mean = frame.groupby("opponent_team_id")["points_allowed"].transform("mean")
+        global_points_allowed_mean = frame["points_allowed"].mean()
+        frame["opponent_avg_points_allowed_last_10"] = (
+            frame["opponent_avg_points_allowed_last_10"]
+            .fillna(per_opponent_mean)
+            .fillna(global_points_allowed_mean)
+        )
+
+        fallback_possessions = _possessions_proxy(
+            frame["opponent_fga"],
+            frame["opponent_oreb"],
+            frame["opponent_tov"],
+            frame["opponent_fta"],
+        ).mean()
+        if frame["opponent_possessions_last_10"].isna().all():
+            frame["opponent_possessions_last_10"] = fallback_possessions
+        else:
+            frame["opponent_possessions_last_10"] = frame[
+                "opponent_possessions_last_10"
+            ].fillna(fallback_possessions)
+    else:
+        frame["opponent_avg_points_allowed_last_10"] = 115.0
+        frame["opponent_possessions_last_10"] = 100.0
+
+    frame["opponent_def_rating_last_10"] = 100.0 * (
+        frame["opponent_avg_points_allowed_last_10"] / frame["opponent_possessions_last_10"]
+    )
+    frame["opponent_def_rating_last_10"] = (
+        frame["opponent_def_rating_last_10"]
+        .replace([float("inf"), float("-inf")], pd.NA)
+        .fillna(frame["opponent_def_rating_last_10"].mean())
+        .fillna(115.0)
+    )
+
+    for column in FEATURE_COLUMNS:
+        if column not in frame.columns:
+            frame[column] = pd.NA
+
+    return frame.dropna(subset=FEATURE_COLUMNS + [TARGET_COLUMN]).reset_index(drop=True)
+
+
+def time_split(
+    df: pd.DataFrame, test_ratio: float = 0.3
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Split chronologically to mimic forward prediction."""
+    ordered = df.sort_values("game_date").reset_index(drop=True)
+    cutoff = max(1, int(len(ordered) * (1 - test_ratio)))
+    return ordered.iloc[:cutoff].copy(), ordered.iloc[cutoff:].copy()

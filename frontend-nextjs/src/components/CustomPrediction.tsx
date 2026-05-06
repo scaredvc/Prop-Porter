@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
+
 import { fetchData } from '@/lib/api'
 
 interface Player {
@@ -14,8 +15,16 @@ interface Team {
   full_name: string
 }
 
+interface LastMatchup {
+  game_date: string
+  points: number | null
+  minutes: number | null
+  fga: number | null
+}
+
 interface Prediction {
   predicted_points: number
+  last_matchup?: LastMatchup | null
 }
 
 export default function CustomPrediction() {
@@ -35,29 +44,27 @@ export default function CustomPrediction() {
   const initializeData = async () => {
     try {
       setLoading(true)
+      setError('')
+
       const [playersRaw, teamsRaw] = await Promise.all([
         fetchData('/players'),
-        fetchData('/teams')
+        fetchData('/teams'),
       ])
-
-      // Normalize possible response shapes
       const playersAll = Array.isArray(playersRaw) ? playersRaw : (playersRaw?.players || [])
       const teamsAll = Array.isArray(teamsRaw) ? teamsRaw : (teamsRaw?.teams || [])
 
-      // Filter only active players and sort
       const filteredPlayers = playersAll
-        .filter((p: Player) => p && (p.is_active !== false))
+        .filter((player: Player) => player && player.is_active !== false)
         .sort((a: Player, b: Player) => (a.full_name || '').localeCompare(b.full_name || ''))
 
-      // Sort teams alphabetically
       const sortedTeams = teamsAll
-        .filter((t: Team) => t)
+        .filter((team: Team) => team)
         .sort((a: Team, b: Team) => (a.full_name || '').localeCompare(b.full_name || ''))
 
       setPlayers(filteredPlayers)
       setTeams(sortedTeams)
-    } catch (error) {
-      console.error('Failed to initialize data:', error)
+    } catch (loadError) {
+      console.error('Failed to load data:', loadError)
       setError('Failed to load players and teams. Please try again later.')
     } finally {
       setLoading(false)
@@ -65,96 +72,91 @@ export default function CustomPrediction() {
   }
 
   const handlePrediction = async () => {
-    if (!selectedPlayerId || !selectedTeamId) return
+    if (!selectedPlayerId || !selectedTeamId) {
+      return
+    }
 
-    setPredictionStatus('Asking Porter...')
+    setPredictionStatus('Running model...')
     setPrediction(null)
 
     try {
-      const predictionData = await fetchData(`/predict?player_id=${selectedPlayerId}&opponent_team_id=${selectedTeamId}`)
-      
-      // Validate prediction data
+      const predictionData = await fetchData(
+        `/predict?player_id=${selectedPlayerId}&opponent_team_id=${selectedTeamId}`
+      )
       const points = Number(predictionData.predicted_points)
+
       if (!Number.isFinite(points)) {
         throw new Error('Missing or invalid predicted_points')
       }
 
       setPrediction(predictionData)
       setPredictionStatus('')
-    } catch (error) {
-      console.error('Error during prediction:', error)
+    } catch (predictionError) {
+      console.error('Prediction error:', predictionError)
       setPredictionStatus('Error getting prediction. Please try again.')
     }
   }
 
-  const getSelectedPlayerName = () => {
-    const player = players.find(p => p.id === selectedPlayerId)
-    return player?.full_name || '—'
-  }
-
-  const getSelectedTeamName = () => {
-    const team = teams.find(t => t.id === selectedTeamId)
-    return team?.full_name || '—'
-  }
-
-  const formatMaybe = (value: any) => {
+  const formatMaybe = (value: number | string | null | undefined, digits = 1) => {
     const num = Number(value)
-    return Number.isFinite(num) ? num.toFixed(1) : 'N/A'
+    return Number.isFinite(num) ? num.toFixed(digits) : 'N/A'
   }
+
+  const matchup = prediction?.last_matchup
 
   if (loading) {
     return (
-      <div className="card">
-        <div className="loading">Loading players and teams...</div>
-      </div>
+      <section className="card">
+        <div className="loading">Loading players and opponents...</div>
+      </section>
     )
   }
 
   if (error) {
     return (
-      <div className="card">
+      <section className="card">
         <div className="error-message">
           {error}
           <button onClick={initializeData} className="retry-button">Retry</button>
         </div>
-      </div>
+      </section>
     )
   }
 
   return (
-    <div className="card">
+    <section className="card">
       <div className="card-header">
-        <h1>Custom Prediction</h1>
-        <p>Select a player and opponent to get AI-powered stat predictions</p>
+        <h2>Estimate Expected Points</h2>
+        <p>Select a player and opponent. The model returns one points estimate.</p>
       </div>
-      
+
       <div className="card-body">
         <div className="selectors">
           <div className="select-group">
-            <label htmlFor="player-select">Select a Player:</label>
-            <select 
+            <label htmlFor="player-select">Player</label>
+            <select
               id="player-select"
               value={selectedPlayerId}
-              onChange={(e) => setSelectedPlayerId(e.target.value)}
+              onChange={(event) => setSelectedPlayerId(event.target.value)}
             >
-              <option value="" disabled>Select a Player...</option>
-              {players.map(player => (
+              <option value="" disabled>Select a player</option>
+              {players.map((player) => (
                 <option key={player.id} value={player.id}>
                   {player.full_name}
                 </option>
               ))}
             </select>
           </div>
-          
+
           <div className="select-group">
-            <label htmlFor="team-select">Select an Opponent:</label>
-            <select 
+            <label htmlFor="team-select">Opponent</label>
+            <select
               id="team-select"
               value={selectedTeamId}
-              onChange={(e) => setSelectedTeamId(e.target.value)}
+              onChange={(event) => setSelectedTeamId(event.target.value)}
             >
-              <option value="" disabled>Select a Team...</option>
-              {teams.map(team => (
+              <option value="" disabled>Select an opponent</option>
+              {teams.map((team) => (
                 <option key={team.id} value={team.id}>
                   {team.full_name}
                 </option>
@@ -162,59 +164,57 @@ export default function CustomPrediction() {
             </select>
           </div>
         </div>
-        
-        <button 
+
+        <button
           className="predict-button"
           onClick={handlePrediction}
           disabled={!selectedPlayerId || !selectedTeamId}
         >
-          Get Prediction
+          Estimate Points
         </button>
       </div>
 
       <div className="card-footer">
-        <div id="result-container">
-          <div className="prediction-status">{predictionStatus}</div>
-          {prediction && (
-            <div className="prediction-result">
-              <div className="prediction-header">
-                <div className="matchup-info">
-                  <div className="player-team">
-                    <span className="player-name">{getSelectedPlayerName()}</span>
-                    <span className="team-label">Player</span>
-                  </div>
-                  <div className="vs-indicator">
-                    <span className="vs-text">VS</span>
-                  </div>
-                  <div className="player-team">
-                    <span className="team-name">{getSelectedTeamName()}</span>
-                    <span className="team-label">Opponent</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="prediction-stats">
-                <div className="stat-item main-stat">
-                  <div className="stat-icon">🏀</div>
-                  <div className="stat-content">
-                    <div className="stat-label">Predicted Points</div>
-                    <div className="stat-value">{formatMaybe(prediction.predicted_points)}</div>
-                    <div className="stat-category">Points</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="prediction-confidence">
-                <div className="confidence-label">Prediction Confidence</div>
-                <div className="confidence-bar">
-                  <div className="confidence-fill" style={{width: '75%'}}></div>
-                </div>
-                <div className="confidence-text">High Confidence</div>
-              </div>
+        <div className="prediction-status">{predictionStatus}</div>
+        {prediction && (
+          <div className="prediction-result">
+            <div className="stat-item">
+              <div className="stat-label">Predicted points</div>
+              <div className="stat-value">{formatMaybe(prediction.predicted_points, 2)}</div>
             </div>
-          )}
-        </div>
+
+            {matchup && (
+              <div className="secondary-block">
+                <div className="secondary-label">Last recorded game vs this opponent</div>
+                <div className="secondary-grid">
+                  <div>
+                    <span className="secondary-key">Date</span>
+                    <span className="secondary-value">{matchup.game_date}</span>
+                  </div>
+                  <div>
+                    <span className="secondary-key">Points</span>
+                    <span className="secondary-value">{formatMaybe(matchup.points)}</span>
+                  </div>
+                  <div>
+                    <span className="secondary-key">Minutes</span>
+                    <span className="secondary-value">{formatMaybe(matchup.minutes)}</span>
+                  </div>
+                  <div>
+                    <span className="secondary-key">FGA</span>
+                    <span className="secondary-value">{formatMaybe(matchup.fga)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!matchup && (
+              <p className="prediction-note">
+                No prior game against this opponent was found in the current database snapshot.
+              </p>
+            )}
+          </div>
+        )}
       </div>
-    </div>
+    </section>
   )
-} 
+}

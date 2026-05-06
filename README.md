@@ -1,71 +1,55 @@
 # Prop-Porter
 
-NBA Player Stat Predictor - AI-powered basketball analytics platform.
+Prop-Porter is an NBA player points prediction project that explores whether recent box-score history can be used to predict future scoring output.
 
-## 🏗️ Project Structure
+## Demo
 
-```
-Prop-Porter/
-├── backend/               # Python Backend API
-│   ├── api/              # Flask API code
-│   │   ├── __init__.py   # Flask app initialization
-│   │   ├── routes.py     # API endpoints
-│   │   ├── server.py     # Server entry point
-│   │   └── utils.py      # Database utilities
-│   ├── core/             # Core backend modules
-│   ├── data/             # Data handling modules
-│   ├── ml/               # Machine learning code
-│   ├── requirements.txt  # Python dependencies
-│   ├── schema.sql       # Database schema
-│   └── venv/            # Virtual environment
-├── frontend-nextjs/       # Next.js React Frontend
-│   ├── src/
-│   │   ├── app/         # Next.js app router
-│   │   ├── components/  # React components
-│   │   └── lib/         # Utility libraries
-│   ├── package.json     # Frontend dependencies
-│   └── ...              # Next.js configuration files
-├── docs/                 # Documentation and notes
-├── scripts/              # Utility scripts
-├── tests/                # Test files
-├── player_points_predictor.pkl  # ML model file
-└── venv/                 # Project virtual environment
-```
+![Prediction vs Actual](demo/prediction_vs_actual.svg)
 
-## 🚀 Quick Start
+## What It Does
 
-### Frontend (Next.js)
+- Loads NBA player game logs
+- Builds rolling historical features
+- Trains a Random Forest model
+- Predicts player point totals
+- Evaluates predictions against actual results
+
+## Run
+
+Train and evaluate:
+
 ```bash
-cd frontend-nextjs
-npm install
-npm run dev
+python -m src.train
 ```
-Open [http://localhost:3000](http://localhost:3000)
 
-### Backend (Python)
+Score sample rows:
+
 ```bash
-cd backend
-pip install -r requirements.txt
-python api/server.py
+python run_model.py --source auto --rows 2
 ```
 
-## 🔧 Development
+Predict one player:
 
-- **Frontend**: React + Next.js + TypeScript + Tailwind CSS
-- **Backend**: Python API with ML models
-- **Database**: SQL database with NBA player/team data
+```bash
+python predict_player.py --player "Stephen Curry" --source auto
+```
 
-## 📚 Documentation
+## Features Used
 
-- See `docs/` folder for detailed migration notes and development guides
-- API documentation available in backend code
+- Recent points history
+- Recent minutes
+- Recent field goal attempts
+- Home or away
+- Rest days
 
-## 🤝 Contributing
+## Limitations
 
-1. Frontend changes: Work in `frontend-nextjs/`
-2. Backend changes: Work in `backend/`
-3. Keep documentation updated in `docs/`
+This is an early exploration. It does not fully account for injuries, lineup changes, trades, coaching changes, or role changes, which are important for real sports prediction.
 
-## 📝 License
+## Status
 
-[Your License Here]
+Prototype / exploration.
+
+## Notes
+
+This repo also contains earlier backend and frontend experiments. The main documented path is the ML pipeline and prediction demo above.

@@ -1,1 +1,1 @@
-# Prop-Porter source package
+"""Prop-Porter experiment package."""
